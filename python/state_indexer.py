@@ -1,3 +1,4 @@
+from networkx import MultiGraph
 import numpy as np
 import networkx as nx
 import networkx.algorithms.bipartite as bpt
@@ -40,15 +41,6 @@ class StateIndexer:
             self.storage[skey] = self.next
             self.next += 1
         return self.next - 1
-
-    def get_index_simple(self, G: nx.MultiGraph) -> int:
-        """
-        Retrieve the reward cache index associated with the state represented by G.
-
-        :param G: A MultiGraph object representing the state.
-        :return: The index associated with the state.
-        """
-        return self.get_index(nx.Graph(G))
 
     def serialize_sparse(self, G: nx.MultiGraph) -> bytes:
         """
@@ -102,6 +94,27 @@ class StateIndexer:
         return bpt.from_biadjacency_matrix(sp.csr_matrix(H), create_using=nx.MultiGraph)
         
 
+class RewardCache(StateIndexer):
+    """
+    The purpose of this class is to map states (represented by their Tanner 
+    graphs) to a dictionary containing the previously computed rewards. Works
+    exactly like StateIndexer, but MultiGraphs are converted to simple Graphs
+    before computing the reward, so the cache index may differ from the state
+    index. 
+    """
+    def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
+        super().__init__(graph_dims, serialization)
+
+    def get_index(self, G: nx.MultiGraph) -> int:
+        """
+        Retrieve the reward cache index associated with the state represented by G.
+
+        :param G: A MultiGraph object representing the state.
+        :return: The index associated with the state.
+        """
+        return super().get_index(nx.Graph(G))
+
+
 class IsomorphicStateIndexer(StateIndexer):
     """
     Specialized indexer where states with isomorphic graphs will be mapped to 
@@ -109,7 +122,7 @@ class IsomorphicStateIndexer(StateIndexer):
     in terms of memory and reward sampling cost. 
     """
     def __init__(self, graph_dims: tuple[int, int], serialization='sparse', 
-                 hash_params: dict={'iterations': 20, 'digest_size': 32}, debug=False):
+                 hash_params: dict=None, debug=False):
         """
         Initialize the IsomorphicStateIndexer.
 
@@ -118,7 +131,10 @@ class IsomorphicStateIndexer(StateIndexer):
         :param hash_params: Parameters to the WL graph hash method.
         """
         super().__init__(graph_dims, serialization)
-        self.hash_params = hash_params
+        if hash_params is None:
+            self.hash_params = {'iterations': 20, 'digest_size': 32}
+        else:
+            self.hash_params = hash_params
         
         self.debug = debug
         if self.debug:
