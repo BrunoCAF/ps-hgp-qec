@@ -12,7 +12,7 @@ class PSAgent:
         self.state_space_params = state_space_params
         self.action_space_params = action_space_params
 
-        self.state_indexer = StateIndexer(self.state_space_params, serialization='sparse')
+        self.state_indexer = StateIndexer(self.state_space_params[:2], serialization='sparse')
         self.encode_action = {'cross-wiring': self.cross_wiring}[self.action_space_params]
 
         self.beta = beta   # Softmax beta parameter
@@ -62,6 +62,6 @@ class PSAgent:
     def cross_wiring(self, a: int) -> tuple[int, int]:
         # a is the index of the action in the range [0..A-1], convert it 
         # to a pair of indices representing the edges to be cross-wired. 
-        i = np.floor(((2*self.A - 1) - np.sqrt((2*self.A-1)**2 - 8*a))//2)
+        i = np.floor(((2*self.A - 1) - np.sqrt((2*self.A-1)**2 - 8*a))//2, dtype=int)
         j = (a - self.A*i + ((i+2)*(i+1))//2)
         return i, j

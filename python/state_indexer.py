@@ -5,16 +5,10 @@ import networkx.algorithms.bipartite as bpt
 import networkx.algorithms.isomorphism as iso
 import scipy.sparse as sp
 
-class StateIndexer:
-    """
-    The purpose of this class is to map states (represented by their Tanner 
-    graphs) to row indices in the PS matrices. The interface is concentrated
-    in the get_index() method, that takes a MultiGraph object and returns an
-    integer index in [0..S-1] where S is the current number of known states. 
-    """
+class GraphSerializer:
     def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
         """
-        Initialize the StateIndexer.
+        Initialize the GraphSerializer.
 
         :param graph_dims: The shape of the dense biadjacency matrix representing the graph.
         :param serialization: The serialization method to be employed, either 'sparse' or 'dense'.
@@ -23,24 +17,6 @@ class StateIndexer:
         serialization_methods = {'sparse': (self.serialize_sparse, self.deserialize_sparse), 
                                  'dense': (self.serialize_dense, self.deserialize_dense)}
         self.serialize, self.deserialize = serialization_methods[serialization]
-
-        self.storage = {}
-        self.next_index = 0
-
-    def get_index(self, G: nx.MultiGraph) -> int:
-        """
-        Retrieve the PS index associated with the state represented by G.
-
-        :param G: A MultiGraph object representing the state.
-        :return: The index associated with the state.
-        """
-        skey = self.serialize(G)
-        if skey in self.storage:
-            return self.storage[skey]
-        else:
-            self.storage[skey] = self.next
-            self.next += 1
-        return self.next - 1
 
     def serialize_sparse(self, G: nx.MultiGraph) -> bytes:
         """
@@ -92,9 +68,45 @@ class StateIndexer:
         """
         H = np.frombuffer(g, dtype=np.uint8).reshape(self.graph_dims)
         return bpt.from_biadjacency_matrix(sp.csr_matrix(H), create_using=nx.MultiGraph)
+    
+
+class StateIndexer:
+    """
+    The purpose of this class is to map states (represented by their Tanner 
+    graphs) to row indices in the PS matrices. The interface is concentrated
+    in the get_index() method, that takes a MultiGraph object and returns an
+    integer index in [0..S-1] where S is the current number of known states. 
+    """
+    def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
+        """
+        Initialize the StateIndexer.
+
+        :param graph_dims: The shape of the dense biadjacency matrix representing the graph.
+        :param serialization: The serialization method to be employed, either 'sparse' or 'dense'.
+        """
+        self.GS = GraphSerializer(graph_dims, serialization)
+        
+        self.storage = {}
+        self.next_index = 0
+
+    def get_index(self, G: nx.MultiGraph) -> int:
+        """
+        Retrieve the PS index associated with the state represented by G.
+
+        :param G: A MultiGraph object representing the state.
+        :return: The index associated with the state.
+        """
+        skey = self.GS.serialize(G)
+        if skey in self.storage:
+            return self.storage[skey]
+        else:
+            self.storage[skey] = self.next_index
+            self.next_index += 1
+        return self.next_index - 1
+
         
 
-class RewardCache(StateIndexer):
+class RewardCache:
     """
     The purpose of this class is to map states (represented by their Tanner 
     graphs) to a dictionary containing the previously computed rewards. Works
@@ -103,16 +115,17 @@ class RewardCache(StateIndexer):
     index. 
     """
     def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
-        super().__init__(graph_dims, serialization)
+        self.GS = GraphSerializer(graph_dims, serialization)
+        self.cache = {}
 
-    def get_index(self, G: nx.MultiGraph) -> int:
-        """
-        Retrieve the reward cache index associated with the state represented by G.
-
-        :param G: A MultiGraph object representing the state.
-        :return: The index associated with the state.
-        """
-        return super().get_index(nx.Graph(G))
+    def __contains__(self, G: nx.MultiGraph) -> bool:
+        return self.GS.serialize(nx.Graph(G)) in self.cache
+    
+    def __getitem__(self, G: nx.MultiGraph) -> float:
+        return self.cache[self.GS.serialize(nx.Graph(G))]
+    
+    def __setitem__(self, G: nx.MultiGraph, value: float):
+        self.cache[self.GS.serialize(nx.Graph(G))] = value
 
 
 class IsomorphicStateIndexer(StateIndexer):
@@ -148,7 +161,7 @@ class IsomorphicStateIndexer(StateIndexer):
         :return: The index associated with the state.
         """
         G_hkey = self.graph_hash(G)
-        G_skey = self.serialize(G)
+        G_skey = self.GS.serialize(G)
 
         if G_hkey in self.storage:
             
@@ -164,7 +177,7 @@ class IsomorphicStateIndexer(StateIndexer):
                 if skey == G_skey:
                     return self.storage[G_hkey][skey]
                 
-                G_old = self.deserialize(skey)
+                G_old = self.GS.deserialize(skey)
                 
                 if self.debug:
                     self.collisions[G_hkey]['f'] += 1
