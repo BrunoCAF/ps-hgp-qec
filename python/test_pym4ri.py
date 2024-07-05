@@ -2,13 +2,13 @@ import pym4ri
 import numpy as np
 import numpy.random as npr
 
-num_tests = 1000
+num_tests = 10000
 for _ in range(num_tests):
     verbose = False
 
-    shape = [(3, 5), (10, 10), (15, 20), (20, 15)][npr.choice(4, p=[0.25, 0.25, 0.25, 0.25])]
+    shape = [(30, 50), (100, 100), (150, 200), (200, 150)][npr.choice(4, p=[0.25, 0.25, 0.25, 0.25])]
     task = npr.choice(['gen2chk', 'chk2gen'])
-    in_matrix = npr.randint(2, size=shape, dtype=np.uint8)
+    in_matrix = npr.randint(2, size=shape, dtype=np.bool_)
     
     if verbose:
         print(shape)
@@ -28,16 +28,28 @@ for _ in range(num_tests):
         if verbose:
             print(out_matrix)
             input()
+        
+        verification = pym4ri.gf2_mul(out_matrix, in_matrix.T)
 
-        assert not ((out_matrix @ in_matrix.T) % 2).any()
+        if verbose:
+            print(verification)
+            input()
+
+        assert not verification.any()
     else:
         out_matrix = pym4ri.chk2gen(in_matrix)
 
         if verbose:
             print(out_matrix)
             input()
+        
+        verification = pym4ri.gf2_mul(in_matrix, out_matrix)
 
-        assert not ((in_matrix @ out_matrix) % 2).any()
+        if verbose:
+            print(verification)
+            input()
+
+        assert not verification.any()
 
     if verbose:
         print("Success!")

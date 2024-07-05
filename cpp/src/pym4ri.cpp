@@ -18,9 +18,9 @@ inline void safe_mzd_print(const mzd_t *M) {
 		printf("\n");
 }
 
-void behold(mzd_t* M, std::string C){
-    const char *c = C.c_str();
-    printf("Is %s NULL? <<%d>>\n", c, M == NULL);
+void behold(mzd_t *M, std::string C) {
+	const char *c = C.c_str();
+	printf("Is %s NULL? <<%d>>\n", c, M == NULL);
 	printf("Behold %s (%d x %d): \n", c, M->nrows, M->ncols);
 	safe_mzd_print(M);
 	printf("--------------------\n");
@@ -109,12 +109,12 @@ mzd_t *gen2chk(mzd_t *G) {
 }
 
 mzd_t *chk2gen(mzd_t *H) {
-    if (H->nrows && H->ncols) {
-        mzd_t *X = mzd_kernel_left_pluq(H, 0);
-        return X ? X : mzd_init(H->ncols, 0);
-    }
+	if (H->nrows && H->ncols) {
+		mzd_t *X = mzd_kernel_left_pluq(H, 0);
+		return X ? X : mzd_init(H->ncols, 0);
+	}
 
-    mzd_t *I = mzd_init(H->ncols, H->ncols);
+	mzd_t *I = mzd_init(H->ncols, H->ncols);
 	for (int i = 0; i < H->ncols; i++)
 		mzd_write_bit(I, i, i, 1);
 	return I;
@@ -124,7 +124,7 @@ rci_t rank(mzd_t *M) { return mzd_echelonize_m4ri(M, 0, 0); }
 
 mzd_t *PyArray_ToMzd(PyObject *array_obj) {
 	PyArrayObject *array = (PyArrayObject *)PyArray_FROM_OTF(
-		array_obj, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
+		array_obj, NPY_BOOL, NPY_ARRAY_IN_ARRAY);
 	if (!array)
 		return NULL;
 
@@ -133,7 +133,7 @@ mzd_t *PyArray_ToMzd(PyObject *array_obj) {
 
 	for (npy_intp i = 0; i < shape[0]; i++) {
 		for (npy_intp j = 0; j < shape[1]; j++) {
-			uint8_t value = *(uint8_t *)PyArray_GETPTR2(array, i, j);
+			bool value = *(bool *)PyArray_GETPTR2(array, i, j);
 			mzd_write_bit(matrix, i, j, value);
 		}
 	}
@@ -143,13 +143,13 @@ mzd_t *PyArray_ToMzd(PyObject *array_obj) {
 
 PyObject *MzdToPyArray(mzd_t *matrix) {
 	npy_intp dims[2] = {matrix->nrows, matrix->ncols};
-	PyObject *array_obj = PyArray_SimpleNew(2, dims, NPY_UINT8);
+	PyObject *array_obj = PyArray_SimpleNew(2, dims, NPY_BOOL);
 	PyArrayObject *array = (PyArrayObject *)array_obj;
 
 	for (int i = 0; i < matrix->nrows; i++) {
 		for (int j = 0; j < matrix->ncols; j++) {
-			uint8_t value = mzd_read_bit(matrix, i, j);
-			*(uint8_t *)PyArray_GETPTR2(array, i, j) = value;
+			bool value = mzd_read_bit(matrix, i, j);
+			*(bool *)PyArray_GETPTR2(array, i, j) = value;
 		}
 	}
 	return array_obj;
@@ -199,65 +199,81 @@ static PyObject *rank(PyObject *self, PyObject *args) {
 	return Py_BuildValue("i", r);
 }
 
-void test_chk2gen(mzd_t *H){
-    printf(":: CHK2GEN TEST ::\n");
-    // behold H
-    behold(H, "H");
+// extern "C"
+static PyObject *gf2_mul(PyObject *self, PyObject *args) {
+	(void)self;
+	PyObject *A_obj, *B_obj;
+	if (!PyArg_ParseTuple(args, "OO", &A_obj, &B_obj))
+		return NULL;
 
-    // apply chk2gen
-    mzd_t *HH = safe_mzd_copy(NULL, H);
+	mzd_t *A = PyArray_ToMzd(A_obj), *B = PyArray_ToMzd(B_obj);
+	mzd_t *C = mzd_mul(NULL, A, B, 0);
+	PyObject *C_obj = MzdToPyArray(C);
+	mzd_free(A), mzd_free(B), mzd_free(C);
+
+	return C_obj;
+}
+
+void test_chk2gen(mzd_t *H) {
+	printf(":: CHK2GEN TEST ::\n");
+	// behold H
+	behold(H, "H");
+
+	// apply chk2gen
+	mzd_t *HH = safe_mzd_copy(NULL, H);
 	mzd_t *G = chk2gen(HH);
 	mzd_free(HH);
-    
-    // behold G
-    behold(G, "G");
 
-    // verify condition
-    mzd_t *X = mzd_mul(NULL, H, G, 0);
+	// behold G
+	behold(G, "G");
+
+	// verify condition
+	mzd_t *X = mzd_mul(NULL, H, G, 0);
 
 	behold(X, "H*G");
 
 	if (X->nrows && X->ncols)
 		assert(mzd_is_zero(X));
 
-    // clear
+	// clear
 	mzd_free(X);
-	mzd_free(G); 
-    
-    printf(":: CHK2GEN DONE ::\n");
+	mzd_free(G);
+
+	printf(":: CHK2GEN DONE ::\n");
 }
 
-void test_gen2chk(mzd_t *H){
+void test_gen2chk(mzd_t *H) {
 	printf(":: GEN2CHK TEST ::\n");
-    // behold H
-    behold(H, "H");
-    
-    // apply gen2chk
-    mzd_t *HH = safe_mzd_copy(NULL, H);
-    mzd_t *G = gen2chk(HH);
+	// behold H
+	behold(H, "H");
+
+	// apply gen2chk
+	mzd_t *HH = safe_mzd_copy(NULL, H);
+	mzd_t *G = gen2chk(HH);
 	mzd_free(HH);
 
-    // behold G
-    behold(G, "G");
+	// behold G
+	behold(G, "G");
 
-    // verify condition
-	mzd_t *Ht = safe_mzd_transpose(NULL, H), *X = mzd_mul(NULL, G, Ht, 0); mzd_free(Ht);
+	// verify condition
+	mzd_t *Ht = safe_mzd_transpose(NULL, H), *X = mzd_mul(NULL, G, Ht, 0);
+	mzd_free(Ht);
 
 	behold(X, "G*H^t");
 
 	if (X->nrows && X->ncols)
 		assert(mzd_is_zero(X));
 
-    // clear
+	// clear
 	mzd_free(X);
-	mzd_free(G); 
-    
-    printf(":: GEN2CHK DONE ::\n");
+	mzd_free(G);
+
+	printf(":: GEN2CHK DONE ::\n");
 }
 
-void test_rank(mzd_t *H){
-    behold(H, "H");
-    printf("rank(H) = %d\n", rank(H));
+void test_rank(mzd_t *H) {
+	behold(H, "H");
+	printf("rank(H) = %d\n", rank(H));
 }
 
 int main() {
@@ -273,11 +289,11 @@ int main() {
 		for (int j = 0; j < n; j++)
 			mzd_write_bit(H, i, j, example[i][j]);
 
-    // test_chk2gen(H);
-    // test_gen2chk(H);
-    test_rank(H);
+	test_chk2gen(H);
+	test_gen2chk(H);
+	test_rank(H);
 
-    mzd_free(H);
+	mzd_free(H);
 
 	return 0;
 }
@@ -288,6 +304,7 @@ static PyMethodDef cssutils[] = {
 	{"chk2gen", chk2gen, METH_VARARGS,
 	 "Find a generator matrix from a parity-check matrix."},
 	{"rank", rank, METH_VARARGS, "Computes the rank of a matrix in GF(2)."},
+	{"gf2_mul", gf2_mul, METH_VARARGS, "GF(2) matrix multiplication."},
 	{NULL, NULL, 0, NULL},
 };
 
