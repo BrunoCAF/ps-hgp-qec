@@ -6,10 +6,42 @@
 #include <numpy/ndarrayobject.h>
 
 #include <cstdlib>
+#include <string>
 
 #undef NDEBUG
 #include <assert.h>
 
+inline void safe_mzd_print(const mzd_t *M) {
+	if (M && M->nrows && M->ncols)
+		mzd_print(M);
+	else
+		printf("\n");
+}
+
+void behold(mzd_t* M, std::string C){
+    const char *c = C.c_str();
+    printf("Is %s NULL? <<%d>>\n", c, M == NULL);
+	printf("Behold %s (%d x %d): \n", c, M->nrows, M->ncols);
+	safe_mzd_print(M);
+	printf("--------------------\n");
+}
+
+mzd_t *safe_mzd_copy(mzd_t *DST, const mzd_t *A) {
+	return (A->nrows && A->ncols) ? mzd_copy(DST, A)
+								  : DST = mzd_init(A->nrows, A->ncols);
+}
+
+mzd_t *safe_mzd_transpose(mzd_t *DST, const mzd_t *A) {
+	return (A->nrows && A->ncols) ? mzd_transpose(DST, A)
+								  : DST = mzd_init(A->ncols, A->nrows);
+}
+
+mzd_t *safe_mzd_submatrix(mzd_t *S, const mzd_t *M, rci_t lowr, rci_t lowc,
+						  rci_t highr, rci_t highc) {
+	if ((highr - lowr) && (highc - lowc))
+		return mzd_submatrix(S, M, lowr, lowc, highr, highc);
+	return S = mzd_init(highr - lowr, highc - lowc);
+}
 
 std::pair<std::pair<mzd_t *, mzd_t *>, std::pair<mzp_t *, mzp_t *>>
 clean_pluq(mzd_t *A) {
@@ -19,10 +51,11 @@ clean_pluq(mzd_t *A) {
 
 	mzd_t *L_sq = mzd_init(r, r), *L_low;
 	mzd_t *U_sq = mzd_init(r, r), *U_right;
-	L_sq = mzd_extract_l(L_sq, mzd_submatrix(L_sq, A, 0, 0, r, r));
-	L_low = mzd_submatrix(NULL, A, r, 0, m, r);
-	U_sq = mzd_extract_u(U_sq, mzd_submatrix(U_sq, A, 0, 0, r, r));
-	U_right = mzd_submatrix(NULL, A, 0, r, r, n);
+	L_sq = mzd_extract_l(L_sq, safe_mzd_submatrix(L_sq, A, 0, 0, r, r));
+	U_sq = mzd_extract_u(U_sq, safe_mzd_submatrix(U_sq, A, 0, 0, r, r));
+
+	L_low = safe_mzd_submatrix(NULL, A, r, 0, m, r);
+	U_right = safe_mzd_submatrix(NULL, A, 0, r, r, n);
 
 	mzd_t *L = mzd_stack(NULL, L_sq, L_low);
 	mzd_t *U = mzd_concat(NULL, U_sq, U_right);
@@ -39,8 +72,8 @@ mzd_t *_gen2chk(mzd_t *G) {
 	auto [m, n] = std::make_pair(G->nrows, G->ncols);
 	rci_t r = m;
 
-	mzd_t *A = mzd_submatrix(NULL, G, 0, r, m, n);
-	mzd_t *At = mzd_transpose(NULL, A);
+	mzd_t *A = safe_mzd_submatrix(NULL, G, 0, r, m, n);
+	mzd_t *At = safe_mzd_transpose(NULL, A);
 	mzd_t *I = mzd_init(n - r, n - r);
 	for (int i = 0; i < n - r; i++)
 		mzd_write_bit(I, i, i, 1);
@@ -53,26 +86,45 @@ mzd_t *_gen2chk(mzd_t *G) {
 }
 
 mzd_t *gen2chk(mzd_t *G) {
-	auto [L_U, P_Q] = clean_pluq(G);
-	auto [L, U] = L_U;
-	auto [P, Q] = P_Q;
-	mzd_free(L), mzp_free(P);
+	// Safety check against empty matrices
+	if (G->nrows && G->ncols) {
+		auto [L_U, P_Q] = clean_pluq(G);
+		auto [L, U] = L_U;
+		auto [P, Q] = P_Q;
+		mzd_free(L), mzp_free(P);
 
-	mzd_echelonize_pluq(U, 1);
-	mzd_t *H = _gen2chk(U);
-	mzd_apply_p_right_trans(H, Q);
-	mzd_free(U), mzp_free(Q);
+		mzd_echelonize_pluq(U, 1);
 
-	return H;
+		mzd_t *H = _gen2chk(U);
+		mzd_apply_p_right(H, Q);
+		mzd_free(U), mzp_free(Q);
+
+		return H;
+	}
+
+	mzd_t *I = mzd_init(G->ncols, G->ncols);
+	for (int i = 0; i < G->ncols; i++)
+		mzd_write_bit(I, i, i, 1);
+	return I;
 }
 
-mzd_t *chk2gen(mzd_t *H) { return mzd_kernel_left_pluq(H, 0); }
+mzd_t *chk2gen(mzd_t *H) {
+    if (H->nrows && H->ncols) {
+        mzd_t *X = mzd_kernel_left_pluq(H, 0);
+        return X ? X : mzd_init(H->ncols, 0);
+    }
+
+    mzd_t *I = mzd_init(H->ncols, H->ncols);
+	for (int i = 0; i < H->ncols; i++)
+		mzd_write_bit(I, i, i, 1);
+	return I;
+}
 
 rci_t rank(mzd_t *M) { return mzd_echelonize_m4ri(M, 0, 0); }
 
 mzd_t *PyArray_ToMzd(PyObject *array_obj) {
 	PyArrayObject *array = (PyArrayObject *)PyArray_FROM_OTF(
-		array_obj, NPY_UINT8, NPY_ARRAY_IN_ARRAY); 
+		array_obj, NPY_UINT8, NPY_ARRAY_IN_ARRAY);
 	if (!array)
 		return NULL;
 
@@ -103,7 +155,7 @@ PyObject *MzdToPyArray(mzd_t *matrix) {
 	return array_obj;
 }
 
-// extern "C" 
+// extern "C"
 static PyObject *gen2chk(PyObject *self, PyObject *args) {
 	(void)self;
 	PyObject *G_obj;
@@ -119,7 +171,7 @@ static PyObject *gen2chk(PyObject *self, PyObject *args) {
 	return H_obj;
 }
 
-// extern "C" 
+// extern "C"
 static PyObject *chk2gen(PyObject *self, PyObject *args) {
 	(void)self;
 	PyObject *H_obj;
@@ -135,7 +187,7 @@ static PyObject *chk2gen(PyObject *self, PyObject *args) {
 	return G_obj;
 }
 
-// extern "C" 
+// extern "C"
 static PyObject *rank(PyObject *self, PyObject *args) {
 	(void)self;
 	PyObject *M_obj;
@@ -147,39 +199,85 @@ static PyObject *rank(PyObject *self, PyObject *args) {
 	return Py_BuildValue("i", r);
 }
 
+void test_chk2gen(mzd_t *H){
+    printf(":: CHK2GEN TEST ::\n");
+    // behold H
+    behold(H, "H");
+
+    // apply chk2gen
+    mzd_t *HH = safe_mzd_copy(NULL, H);
+	mzd_t *G = chk2gen(HH);
+	mzd_free(HH);
+    
+    // behold G
+    behold(G, "G");
+
+    // verify condition
+    mzd_t *X = mzd_mul(NULL, H, G, 0);
+
+	behold(X, "H*G");
+
+	if (X->nrows && X->ncols)
+		assert(mzd_is_zero(X));
+
+    // clear
+	mzd_free(X);
+	mzd_free(G); 
+    
+    printf(":: CHK2GEN DONE ::\n");
+}
+
+void test_gen2chk(mzd_t *H){
+	printf(":: GEN2CHK TEST ::\n");
+    // behold H
+    behold(H, "H");
+    
+    // apply gen2chk
+    mzd_t *HH = safe_mzd_copy(NULL, H);
+    mzd_t *G = gen2chk(HH);
+	mzd_free(HH);
+
+    // behold G
+    behold(G, "G");
+
+    // verify condition
+	mzd_t *Ht = safe_mzd_transpose(NULL, H), *X = mzd_mul(NULL, G, Ht, 0); mzd_free(Ht);
+
+	behold(X, "G*H^t");
+
+	if (X->nrows && X->ncols)
+		assert(mzd_is_zero(X));
+
+    // clear
+	mzd_free(X);
+	mzd_free(G); 
+    
+    printf(":: GEN2CHK DONE ::\n");
+}
+
+void test_rank(mzd_t *H){
+    behold(H, "H");
+    printf("rank(H) = %d\n", rank(H));
+}
+
 int main() {
 	const rci_t m = 3, n = 5;
 
 	rci_t example[m][n] = {
-		{0, 0, 1, 1, 1},
-		{1, 1, 0, 0, 0},
+		{0, 1, 1, 0, 1},
 		{0, 0, 0, 0, 0},
+		{0, 1, 0, 0, 1},
 	};
 	mzd_t *H = mzd_init(m, n);
 	for (int i = 0; i < m; i++)
 		for (int j = 0; j < n; j++)
 			mzd_write_bit(H, i, j, example[i][j]);
 
-	printf("Behold, H:\n");
-	mzd_print(H);
-	printf("----------\n");
+    // test_chk2gen(H);
+    // test_gen2chk(H);
+    test_rank(H);
 
-	// mzd_t *H = gen2chk(G);
-	mzd_t *HH = mzd_copy(NULL, H), *G = chk2gen(HH);
-    mzd_free(HH);
-
-	printf("Behold, G:\n");
-	mzd_print(G);
-	printf("----------\n");
-
-	mzd_t *HG = mzd_mul(NULL, H, G, 0);
-
-	printf("Behold, HG:\n");
-	mzd_print(HG);
-	printf("----------\n");
-
-	assert(mzd_is_zero(HG));
-	mzd_free(G), mzd_free(H), mzd_free(HG);
+    mzd_free(H);
 
 	return 0;
 }
@@ -199,10 +297,10 @@ static struct PyModuleDef m4rimodule = {
 	NULL, // module_doc,
 	-1,	  // size of the state of the module
 	cssutils,
-    NULL, // m_slots
-    NULL, // m_traverse
-    NULL, // m_clear
-    NULL  // m_free
+	NULL, // m_slots
+	NULL, // m_traverse
+	NULL, // m_clear
+	NULL  // m_free
 };
 
 PyMODINIT_FUNC PyInit_pym4ri(void) {
