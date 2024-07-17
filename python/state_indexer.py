@@ -5,18 +5,38 @@ import networkx.algorithms.bipartite as bpt
 import networkx.algorithms.isomorphism as iso
 import scipy.sparse as sp
 
+import pynauty as nauty
+# TODO: test graph canonization using nauty, write deserialize nauty, etc
+
 class GraphSerializer:
-    def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
+    def __init__(self, graph_dims: tuple[int, int], serialization='nauty'):
         """
         Initialize the GraphSerializer.
 
         :param graph_dims: The shape of the dense biadjacency matrix representing the graph.
-        :param serialization: The serialization method to be employed, either 'sparse' or 'dense'.
+        :param serialization: The serialization method to be employed, 'sparse'|'dense'|'nauty'.
         """
         self.graph_dims = graph_dims
-        serialization_methods = {'sparse': (self.serialize_sparse, self.deserialize_sparse), 
-                                 'dense': (self.serialize_dense, self.deserialize_dense)}
-        self.serialize, self.deserialize = serialization_methods[serialization]
+        serialization_methods = {'sparse': self.serialize_sparse, 
+                                 'dense': self.serialize_dense,
+                                 'nauty': self.serialize_nauty, 
+                                }
+        self.serialize = serialization_methods[serialization]
+
+    def serialize_nauty(self, G: nx.MultiGraph) -> bytes:
+        """
+        Serialize the state multigraph via graph canonization with Nauty. 
+        The state is first converted into a simple graph. 
+
+        :param G: A MultiGraph object representing the state.
+        :return: The serialized canonical form of the graph as bytes.
+        """
+        GG = nx.Graph(G)
+        g = nauty.Graph(
+            number_of_vertices=GG.number_of_nodes(),
+            adjacency_dict={i: list(GG.neighbors(i)) for i in range(GG.number_of_nodes())}
+        )
+        return nauty.certificate(g)
 
     def serialize_sparse(self, G: nx.MultiGraph) -> bytes:
         """
@@ -31,6 +51,17 @@ class GraphSerializer:
         std_serial = lambda x: x.astype(np.uint8).tobytes()
         return std_serial(H.indptr) + std_serial(H.indices) + std_serial(H.data)
 
+    def serialize_dense(self, G: nx.MultiGraph) -> bytes:
+        """
+        Serialize the graph into a bytestring from its dense biadjacency matrix.
+
+        :param G: A MultiGraph object representing the state.
+        :return: The serialized biadjacency matrix as bytes.
+        """
+        m = self.graph_dims[0]
+        H = bpt.biadjacency_matrix(G, row_order=np.arange(m)).astype(np.uint8).todense()
+        return H.tobytes()
+        
     def deserialize_sparse(self, g: bytes) -> nx.MultiGraph:
         """
         Deserialize the biadjacency matrix into its sparse CSR format.
@@ -47,17 +78,6 @@ class GraphSerializer:
         
         H = sp.csr_matrix((data, indices, indptr), shape=self.graph_dims)
         return bpt.from_biadjacency_matrix(H, create_using=nx.MultiGraph)
-
-    def serialize_dense(self, G: nx.MultiGraph) -> bytes:
-        """
-        Serialize the graph into a bytestring from its dense biadjacency matrix.
-
-        :param G: A MultiGraph object representing the state.
-        :return: The serialized biadjacency matrix as bytes.
-        """
-        m = self.graph_dims[0]
-        H = bpt.biadjacency_matrix(G, row_order=np.arange(m)).astype(np.uint8).todense()
-        return H.tobytes()
 
     def deserialize_dense(self, g: bytes) -> nx.MultiGraph:
         """
@@ -114,7 +134,7 @@ class RewardCache:
     before computing the reward, so the cache index may differ from the state
     index. 
     """
-    def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
+    def __init__(self, graph_dims: tuple[int, int], serialization='nauty'):
         self.GS = GraphSerializer(graph_dims, serialization)
         self.cache = {}
 
@@ -126,90 +146,3 @@ class RewardCache:
     
     def __setitem__(self, G: nx.MultiGraph, value: float):
         self.cache[self.GS.serialize(nx.Graph(G))] = value
-
-
-class IsomorphicStateIndexer(StateIndexer):
-    """
-    Specialized indexer where states with isomorphic graphs will be mapped to 
-    the same index, when the number of isomorphic duplicates becomes harmful 
-    in terms of memory and reward sampling cost. 
-    """
-    def __init__(self, graph_dims: tuple[int, int], serialization='sparse', 
-                 hash_params: dict=None, debug=False):
-        """
-        Initialize the IsomorphicStateIndexer.
-
-        :param graph_dims: The shape of the dense biadjacency matrix representing the graph.
-        :param serialization: The serialization method to be employed, either 'sparse' or 'dense'.
-        :param hash_params: Parameters to the WL graph hash method.
-        """
-        super().__init__(graph_dims, serialization)
-        if hash_params is None:
-            self.hash_params = {'iterations': 20, 'digest_size': 32}
-        else:
-            self.hash_params = hash_params
-        
-        self.debug = debug
-        if self.debug:
-            self.collisions = {}
-
-    def get_index(self, G: nx.MultiGraph) -> int:
-        """
-        Retrieve the PS index associated with the state represented by G.
-
-        :param G: A MultiGraph object representing the state.
-        :return: The index associated with the state.
-        """
-        G_hkey = self.graph_hash(G)
-        G_skey = self.GS.serialize(G)
-
-        if G_hkey in self.storage:
-            
-            if self.debug:
-                if G_hkey not in self.collisions:
-                    self.collisions[G_hkey] = {'h': 1, 's': 0, 'f': 0, 'i': 0}
-                else:
-                    self.collisions[G_hkey]['h'] += 1
-            
-            for skey in self.storage[G_hkey]:
-                if self.debug:
-                    self.collisions[G_hkey]['s'] += 1
-                if skey == G_skey:
-                    return self.storage[G_hkey][skey]
-                
-                G_old = self.GS.deserialize(skey)
-                
-                if self.debug:
-                    self.collisions[G_hkey]['f'] += 1
-                if iso.faster_could_be_isomorphic(G, G_old):
-
-                    if self.debug:
-                        self.collisions[G_hkey]['i'] += 1
-                    if iso.vf2pp_is_isomorphic(G, G_old):
-                        return self.storage[G_hkey][skey]
-            
-            self.storage[G_hkey][G_skey] = self.next_index
-        else:
-            self.storage[G_hkey] = {G_skey: self.next_index}
-        
-        self.next_index += 1
-        
-        if self.debug:
-            print(self.next_index - 1)
-        
-        return self.next_index - 1
-
-    def collision_report(self):
-        assert self.debug
-        print(self.collisions)
-        print([len(s_dict) for s_dict in self.storage.values()])
-
-    def graph_hash(self, G: nx.MultiGraph) -> str:
-        """
-        Get the Weisfeiler-Lehman graph hash.
-
-        :param G: A MultiGraph object representing the state.
-        :return: The WL graph hash as a string.
-        """
-        return nx.algorithms.weisfeiler_lehman_graph_hash(G, **self.hash_params)
-
