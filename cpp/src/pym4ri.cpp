@@ -216,11 +216,12 @@ PyObject *MzdToPyArray(mzd_t *matrix) {
 
 int parse_edgelist(PyObject *edgelist, void *vec){
     std::vector<std::pair<int, int>> *V = (std::vector<std::pair<int, int>> *) vec;
-    if(!PyIter_Check(edgelist)) {
-        PyErr_SetString(PyExc_TypeError, "Expected an iterable");
+    if(!PySequence_Check(edgelist)) {
+        PyErr_SetString(PyExc_TypeError, "Expected a sequence for the edgelist");
         return 0;
     }
-    for(PyObject *tuple_obj = PyIter_Next(edgelist); tuple_obj; tuple_obj = PyIter_Next(edgelist)){        
+    for(Py_ssize_t i = 0; i < PySequence_Length(edgelist); i++){  
+        PyObject *tuple_obj = PySequence_GetItem(edgelist, i);
         if (!PyTuple_Check(tuple_obj) || PyTuple_Size(tuple_obj) != 2) {
             PyErr_SetString(PyExc_TypeError, "Iterable must contain tuples of size 2");
             return 0;
@@ -238,11 +239,13 @@ int parse_edgelist(PyObject *edgelist, void *vec){
 
 int parse_list(PyObject *list, void *vec){
     std::vector<double> *V = (std::vector<double> *) vec;
-    if(!PyIter_Check(list)) {
-        PyErr_SetString(PyExc_TypeError, "Expected an iterable");
+    if(!PySequence_Check(list)) {
+        PyErr_SetString(PyExc_TypeError, "Expected a sequence for the p_vals list");
         return 0;
     }
-    for(PyObject *item_obj = PyIter_Next(list); item_obj; item_obj = PyIter_Next(list)){
+
+    for(Py_ssize_t i = 0; i < PySequence_Length(list); i++){
+        PyObject *item_obj = PySequence_GetItem(list, i);
         if (!PyFloat_Check(item_obj)) {
             PyErr_SetString(PyExc_TypeError, "p values must be float");
             return 0;
@@ -344,18 +347,6 @@ static PyObject *MC_erasure_plog_rank(PyObject *self, PyObject *args) {
                         parse_edgelist, (void *)&edges, &num_trials, 
                         parse_list, (void *)&p_vals)) return NULL;
     
-    // Construct Hx = [Im x H'| H x In] and Hz = [H'x Im | In x H]
-    auto &[m, n] = shape;
-    rci_t num_checks = m*n, num_qubits = m*m + n*n;
-    mzd_t *Hx = mzd_init(num_checks, num_qubits), *Hz = mzd_init(num_checks, num_qubits);
-    mzd_t *HxT = mzd_init(num_qubits, num_checks), *HzT = mzd_init(num_qubits, num_checks);
-    build_HxHz_from_edges(Hx, Hz, shape, edges);
-    build_HxTHzT_from_edges(HxT, HzT, shape, edges);
-
-    // Precompute rank(H)
-    rci_t rank_H = rank(Hx) + rank(Hz);
-    mzd_free(Hx), mzd_free(Hz);
-
     // Prepare np.arrays to be returned
     npy_intp dims[1] = {(npy_intp) p_vals.size()};
     PyArrayObject *means = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_DOUBLE);
@@ -364,8 +355,20 @@ static PyObject *MC_erasure_plog_rank(PyObject *self, PyObject *args) {
     // Set RNG
     std::random_device rd; std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(0.0, 1.0);
-    std::vector<bool> erasure(num_qubits);
+    auto &[m, n] = shape;
+    rci_t num_checks = m*n, num_qubits = m*m + n*n;
+    std::vector<bool> erasure(num_qubits);    
+    
+    // Construct Hx = [Im x H'| H x In] and Hz = [H'x Im | In x H]
+    mzd_t *Hx = mzd_init(num_checks, num_qubits), *Hz = mzd_init(num_checks, num_qubits);
+    mzd_t *HxT = mzd_init(num_qubits, num_checks), *HzT = mzd_init(num_qubits, num_checks);
+    build_HxHz_from_edges(Hx, Hz, shape, edges);
+    build_HxTHzT_from_edges(HxT, HzT, shape, edges);
 
+    // Precompute rank(H)
+    rci_t rank_H = rank(Hx) + rank(Hz);
+    mzd_free(Hx), mzd_free(Hz); 
+    
     // Preallocate space to hold the matrices whose ranks shall be computed
     mzd_t *canvas = mzd_init(num_qubits, num_checks);
     // Use a window to access the submatrices corresponding to erased and intact bits
@@ -416,9 +419,8 @@ static PyObject *MC_erasure_plog_rank(PyObject *self, PyObject *args) {
         *(double *)PyArray_GETPTR1(stds, idx) = sqrt((failures*(1.-mu)*(1.-mu) + (num_trials - failures)*mu*mu)/(num_trials - 1));
     }
     mzd_free_window(erasure_window); mzd_free(canvas);
-    mzd_free(Hx), mzd_free(Hz);
-    
-    // TODO:  retornar empacotados num dict
+    mzd_free(HxT), mzd_free(HzT);
+
     Py_INCREF(means), Py_INCREF(stds);
     PyObject* result_dict = Py_BuildValue("{s:O, s:O}", "mean", means, "std", stds);
     Py_DECREF(means), Py_DECREF(stds);
