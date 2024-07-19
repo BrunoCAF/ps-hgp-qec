@@ -295,6 +295,45 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
     mzd_free_window(erasure_window), mzd_free(canvas), mzd_free(HxT), mzd_free(HzT); 
 }
 
+inline void MC_erasure_plog_rank_only_X(int num_trials, std::vector<double> &p_vals, 
+mzd_t *Hx, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayObject *stds) {
+    // Construct HxT and HzT
+    mzd_t *HxT = safe_mzd_transpose(NULL, Hx);
+    
+    // Preallocate space to hold the matrices whose ranks shall be computed
+    mzd_t *canvas = mzd_init(HxT->nrows, HxT->ncols);
+
+    // Use a window to access the submatrices corresponding to erased and intact bits
+    mzd_t *erasure_window = mzd_init_window(canvas, 0, 0, canvas->nrows, canvas->ncols);
+
+    // Precompute rank(H)
+    rci_t rank_Hx = rank(Hx);
+
+    // Loop over all p_values and do MC simulation
+    for(std::vector<double>::size_type idx = 0; idx < p_vals.size(); idx++){
+        double p = p_vals[idx]; int failures = 0;
+        for(int t = 0; t < num_trials; t++){
+            // Sample erasure
+            int e_weight = sample_erasure(p, select_erased_cols);
+            
+            // Compute dimension gap condition
+            int dimension_gap = e_weight - rank_Hx; // - rank_H_E + rank_H_E_
+            // Add dimension gap due to the X part of the CSS code
+            dimension_gap += erasure_dim_gap_from(HxT, canvas, erasure_window, select_erased_cols, e_weight);
+            
+            // Admit failure only when the dimension gap necessary condition fails
+            if(dimension_gap > 0) failures++;
+        }
+        // Estimate failure rate and estimator variance
+        double mu = (double) failures / num_trials;
+        *(double *)PyArray_GETPTR1(means, idx) = mu;
+        double sigma = sqrt((failures*(1.-mu)*(1.-mu) + (num_trials - failures)*mu*mu)/(num_trials - 1));
+        *(double *)PyArray_GETPTR1(stds, idx) = sigma;
+    }
+    // Cleanup
+    mzd_free_window(erasure_window), mzd_free(canvas), mzd_free(HxT); 
+}
+
 inline void MC_erasure_plog_eta_gamma(int num_trials, std::vector<double> &p_vals, 
 mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayObject *stds) {
     // Preallocate space to hold the submatrices or copies of Hx/Hz
@@ -332,6 +371,38 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
     }
     // Cleanup
     mzd_free(canvas), mzd_free(eta_Hx), mzd_free(eta_Hz); 
+}
+
+inline void MC_erasure_plog_eta_gamma_only_X(int num_trials, std::vector<double> &p_vals, 
+mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayObject *stds) {
+    // Preallocate space to hold the submatrices or copies of Hz
+    mzd_t *canvas = mzd_init(Hz->nrows, Hz->ncols);
+    
+    // Precompute eta(Hx)
+    mzd_copy(canvas, Hx); mzd_t *eta_Hx = gen2chk(canvas);
+    
+    // Loop over all p_values and do MC simulation
+    for(std::vector<double>::size_type idx = 0; idx < p_vals.size(); idx++){
+        double p = p_vals[idx]; int failures = 0;
+        for(int t = 0; t < num_trials; t++){
+            // Reset permutation to identity
+            mzp_set_ui(select_erased_cols, 1);
+            
+            // Sample erasure
+            int e_weight = sample_erasure(p, select_erased_cols);
+            
+            // Check for the existence of a X type logical error within the erasure
+            if(logical_error_within_erasure(eta_Hx, Hz, canvas, select_erased_cols, e_weight))
+                failures++;
+        }
+        // Estimate failure rate and estimator variance
+        double mu = (double) failures / num_trials;
+        *(double *)PyArray_GETPTR1(means, idx) = mu;
+        double sigma = sqrt((failures*(1.-mu)*(1.-mu) + (num_trials - failures)*mu*mu)/(num_trials - 1));
+        *(double *)PyArray_GETPTR1(stds, idx) = sigma;
+    }
+    // Cleanup
+    mzd_free(canvas), mzd_free(eta_Hx); 
 }
 
 /**
@@ -503,10 +574,11 @@ static PyObject *MC_erasure_plog(PyObject *Py_UNUSED(self), PyObject *args) {
     std::vector<std::pair<int, int>> edges;
     int num_trials;
     std::vector<double> p_vals;
-    bool rank_method;
-    if (!PyArg_ParseTuple(args, "(ii)O&iO&p", &(shape.first), &(shape.second), 
+    int rank_method, only_X;
+    if (!PyArg_ParseTuple(args, "(ii)O&iO&pp", &(shape.first), &(shape.second), 
                         parse_edgelist, (void *)&edges, &num_trials, 
-                        parse_list, (void *)&p_vals, &rank_method)) return NULL;
+                        parse_list, (void *)&p_vals, 
+                        &rank_method, &only_X)) return NULL;
     
     // Prepare np.arrays to be returned
     npy_intp dims[1] = {(npy_intp) p_vals.size()};
@@ -524,9 +596,11 @@ static PyObject *MC_erasure_plog(PyObject *Py_UNUSED(self), PyObject *args) {
 
     // Run Monte Carlo estimation of the logical error rate for the erasure channel
     if(rank_method)
-        MC_erasure_plog_rank(num_trials, p_vals, Hx, Hz, select_erased_cols, means, stds);
+        only_X ? MC_erasure_plog_rank_only_X(num_trials, p_vals, Hx, select_erased_cols, means, stds) :
+                 MC_erasure_plog_rank(num_trials, p_vals, Hx, Hz, select_erased_cols, means, stds); 
     else
-        MC_erasure_plog_eta_gamma(num_trials, p_vals, Hx, Hz, select_erased_cols, means, stds);
+        only_X ? MC_erasure_plog_eta_gamma_only_X(num_trials, p_vals, Hx, Hz, select_erased_cols, means, stds) :
+                 MC_erasure_plog_eta_gamma(num_trials, p_vals, Hx, Hz, select_erased_cols, means, stds); 
 
     // Cleanup
     mzd_free(Hx), mzd_free(Hz), mzp_free(select_erased_cols); 
