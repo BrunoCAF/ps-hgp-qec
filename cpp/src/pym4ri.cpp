@@ -236,7 +236,7 @@ inline bool logical_error_within_erasure(mzd_t *eta, mzd_t *H, mzd_t *canvas,
     
     // Compute the condition for the erasure to contain an X/Z type logical error
     mzd_t *correctability_matrix = mzd_mul(NULL, eta_erasure_window, gamma_H_E, 0);
-    bool logical_error = safe_mzd_is_zero(correctability_matrix);
+    bool logical_error = !safe_mzd_is_zero(correctability_matrix);
 
     // Free allocated matrices, eta window and revert the permutation on eta(Hx)
     mzd_free_window(canvas_erasure_window);
@@ -288,7 +288,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
         // Estimate failure rate and estimator variance
         double mu = (double) failures / num_trials;
         *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt((failures*(1.-mu)*(1.-mu) + (num_trials - failures)*mu*mu)/(num_trials - 1));
+        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
         *(double *)PyArray_GETPTR1(stds, idx) = sigma;
     }
     // Cleanup
@@ -327,7 +327,7 @@ mzd_t *Hx, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayObject *stds)
         // Estimate failure rate and estimator variance
         double mu = (double) failures / num_trials;
         *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt((failures*(1.-mu)*(1.-mu) + (num_trials - failures)*mu*mu)/(num_trials - 1));
+        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
         *(double *)PyArray_GETPTR1(stds, idx) = sigma;
     }
     // Cleanup
@@ -346,10 +346,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
     // Loop over all p_values and do MC simulation
     for(std::vector<double>::size_type idx = 0; idx < p_vals.size(); idx++){
         double p = p_vals[idx]; int failures = 0;
-        for(int t = 0; t < num_trials; t++){
-            // Reset permutation to identity
-            mzp_set_ui(select_erased_cols, 1);
-            
+        for(int t = 0; t < num_trials; t++){            
             // Sample erasure
             int e_weight = sample_erasure(p, select_erased_cols);
             
@@ -366,7 +363,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
         // Estimate failure rate and estimator variance
         double mu = (double) failures / num_trials;
         *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt((failures*(1.-mu)*(1.-mu) + (num_trials - failures)*mu*mu)/(num_trials - 1));
+        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
         *(double *)PyArray_GETPTR1(stds, idx) = sigma;
     }
     // Cleanup
@@ -385,9 +382,6 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
     for(std::vector<double>::size_type idx = 0; idx < p_vals.size(); idx++){
         double p = p_vals[idx]; int failures = 0;
         for(int t = 0; t < num_trials; t++){
-            // Reset permutation to identity
-            mzp_set_ui(select_erased_cols, 1);
-            
             // Sample erasure
             int e_weight = sample_erasure(p, select_erased_cols);
             
@@ -398,7 +392,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
         // Estimate failure rate and estimator variance
         double mu = (double) failures / num_trials;
         *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt((failures*(1.-mu)*(1.-mu) + (num_trials - failures)*mu*mu)/(num_trials - 1));
+        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
         *(double *)PyArray_GETPTR1(stds, idx) = sigma;
     }
     // Cleanup
