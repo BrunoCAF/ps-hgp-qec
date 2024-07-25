@@ -222,17 +222,20 @@ inline int erasure_dim_gap_from(mzd_t *HT, mzd_t *canvas, mzd_t *erasure_window,
     return dimension_gap;
 }
 
-inline bool logical_error_within_erasure(mzd_t *eta, mzd_t *H, mzd_t *canvas, 
+bool logical_error_within_erasure(mzd_t *eta, mzd_t *H, mzd_t *eta_canvas, mzd_t *canvas, 
                                          mzp_t *select_erased_cols, int e_weight) {
     // Compute gamma(H^E) 
-    mzd_copy(canvas, H);
-    mzd_apply_p_right_trans(canvas, select_erased_cols);
+    for(int i = 0; i < H->nrows; i++)
+        for(int j = 0; j < e_weight; j++) 
+            mzd_write_bit(canvas, i, j, mzd_read_bit(H, i, select_erased_cols->values[j]));
     mzd_t *canvas_erasure_window = mzd_init_window(canvas, 0, 0, canvas->nrows, e_weight);
     mzd_t *gamma_H_E = chk2gen(canvas_erasure_window);
 
     // Initialize window to access the erased columns of eta
-    mzd_apply_p_right_trans(eta, select_erased_cols);
-    const mzd_t *eta_erasure_window = mzd_init_window_const(eta, 0, 0, eta->nrows, e_weight);
+    for(int i = 0; i < eta->nrows; i++)
+        for(int j = 0; j < e_weight; j++) 
+            mzd_write_bit(eta_canvas, i, j, mzd_read_bit(eta, i, select_erased_cols->values[j]));
+    const mzd_t *eta_erasure_window = mzd_init_window_const(eta_canvas, 0, 0, eta->nrows, e_weight);
     
     // Compute the condition for the erasure to contain an X/Z type logical error
     mzd_t *correctability_matrix = mzd_mul(NULL, eta_erasure_window, gamma_H_E, 0);
@@ -243,7 +246,6 @@ inline bool logical_error_within_erasure(mzd_t *eta, mzd_t *H, mzd_t *canvas,
     mzd_free(gamma_H_E);
     mzd_free_window((mzd_t *)eta_erasure_window);
     mzd_free(correctability_matrix);
-    mzd_apply_p_right(eta, select_erased_cols);
 
     return logical_error;
 }
@@ -342,6 +344,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
     // Precompute eta(Hx), eta(Hz)
     mzd_copy(canvas, Hx); mzd_t *eta_Hx = gen2chk(canvas);
     mzd_copy(canvas, Hz); mzd_t *eta_Hz = gen2chk(canvas);
+    mzd_t *eta_canvas = mzd_init(MAX(eta_Hx->nrows, eta_Hz->nrows), MAX(eta_Hx->ncols, eta_Hz->ncols));
     
     // Loop over all p_values and do MC simulation
     for(std::vector<double>::size_type idx = 0; idx < p_vals.size(); idx++){
@@ -351,13 +354,13 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
             int e_weight = sample_erasure(p, select_erased_cols);
             
             // Check for the existence of a X type logical error within the erasure
-            if(logical_error_within_erasure(eta_Hx, Hz, canvas, select_erased_cols, e_weight)) {
+            if(logical_error_within_erasure(eta_Hx, Hz, eta_canvas, canvas, select_erased_cols, e_weight)) {
                 failures++;
                 continue;
             }
 
             // Check for the existence of a Z type logical error within the erasure
-            if(logical_error_within_erasure(eta_Hz, Hx, canvas, select_erased_cols, e_weight)) 
+            if(logical_error_within_erasure(eta_Hz, Hx, eta_canvas, canvas, select_erased_cols, e_weight)) 
                 failures++;
         }
         // Estimate failure rate and estimator variance
@@ -367,7 +370,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
         *(double *)PyArray_GETPTR1(stds, idx) = sigma;
     }
     // Cleanup
-    mzd_free(canvas), mzd_free(eta_Hx), mzd_free(eta_Hz); 
+    mzd_free(canvas), mzd_free(eta_canvas), mzd_free(eta_Hx), mzd_free(eta_Hz); 
 }
 
 inline void MC_erasure_plog_eta_gamma_only_X(int num_trials, std::vector<double> &p_vals, 
@@ -377,6 +380,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
     
     // Precompute eta(Hx)
     mzd_copy(canvas, Hx); mzd_t *eta_Hx = gen2chk(canvas);
+    mzd_t *eta_canvas = mzd_init(eta_Hx->nrows, eta_Hx->ncols);
     
     // Loop over all p_values and do MC simulation
     for(std::vector<double>::size_type idx = 0; idx < p_vals.size(); idx++){
@@ -386,7 +390,7 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
             int e_weight = sample_erasure(p, select_erased_cols);
             
             // Check for the existence of a X type logical error within the erasure
-            if(logical_error_within_erasure(eta_Hx, Hz, canvas, select_erased_cols, e_weight))
+            if(logical_error_within_erasure(eta_Hx, Hz, eta_canvas, canvas, select_erased_cols, e_weight))
                 failures++;
         }
         // Estimate failure rate and estimator variance
