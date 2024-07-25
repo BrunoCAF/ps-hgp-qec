@@ -288,10 +288,9 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
             if(dimension_gap > 0) failures++;
         }
         // Estimate failure rate and estimator variance
-        double mu = (double) failures / num_trials;
-        *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
-        *(double *)PyArray_GETPTR1(stds, idx) = sigma;
+        long long M = num_trials, m = failures;
+        *(double *)PyArray_GETPTR1(means, idx) = (double) m / M;
+        *(double *)PyArray_GETPTR1(stds, idx) = sqrt( (double) (m*(M - m)) / (M*(M - 1)) );
     }
     // Cleanup
     mzd_free_window(erasure_window), mzd_free(canvas), mzd_free(HxT), mzd_free(HzT); 
@@ -327,10 +326,9 @@ mzd_t *Hx, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayObject *stds)
             if(dimension_gap > 0) failures++;
         }
         // Estimate failure rate and estimator variance
-        double mu = (double) failures / num_trials;
-        *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
-        *(double *)PyArray_GETPTR1(stds, idx) = sigma;
+        long long M = num_trials, m = failures;
+        *(double *)PyArray_GETPTR1(means, idx) = (double) m / M;
+        *(double *)PyArray_GETPTR1(stds, idx) = sqrt( (double) (m*(M - m)) / (M*(M - 1)) );
     }
     // Cleanup
     mzd_free_window(erasure_window), mzd_free(canvas), mzd_free(HxT); 
@@ -364,10 +362,9 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
                 failures++;
         }
         // Estimate failure rate and estimator variance
-        double mu = (double) failures / num_trials;
-        *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
-        *(double *)PyArray_GETPTR1(stds, idx) = sigma;
+        long long M = num_trials, m = failures;
+        *(double *)PyArray_GETPTR1(means, idx) = (double) m / M;
+        *(double *)PyArray_GETPTR1(stds, idx) = sqrt( (double) (m*(M - m)) / (M*(M - 1)) );
     }
     // Cleanup
     mzd_free(canvas), mzd_free(eta_canvas), mzd_free(eta_Hx), mzd_free(eta_Hz); 
@@ -394,10 +391,9 @@ mzd_t *Hx, mzd_t *Hz, mzp_t *select_erased_cols, PyArrayObject *means, PyArrayOb
                 failures++;
         }
         // Estimate failure rate and estimator variance
-        double mu = (double) failures / num_trials;
-        *(double *)PyArray_GETPTR1(means, idx) = mu;
-        double sigma = sqrt( (double) (failures*(num_trials - failures)) / (num_trials*(num_trials - 1)) );
-        *(double *)PyArray_GETPTR1(stds, idx) = sigma;
+        long long M = num_trials, m = failures;
+        *(double *)PyArray_GETPTR1(means, idx) = (double) m / M;
+        *(double *)PyArray_GETPTR1(stds, idx) = sqrt( (double) (m*(M - m)) / (M*(M - 1)) );
     }
     // Cleanup
     mzd_free(canvas), mzd_free(eta_Hx); 
