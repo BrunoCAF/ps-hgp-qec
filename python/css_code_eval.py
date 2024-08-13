@@ -13,7 +13,8 @@ def CSS_HGP_code_from_state(state: nx.MultiGraph) -> tuple[sp.sparray, int, int]
     G = nx.Graph(state)
     
     # Extract biadjacency matrix from the Tanner graph of the classical code
-    c, v = bpt.sets(G)
+    c = [n for n, b in G.nodes(data='bipartite') if b == 0]
+    v = [n for n, b in G.nodes(data='bipartite') if b == 1]
     H = bpt.biadjacency_matrix(G, row_order=sorted(c), column_order=sorted(v), dtype=np.bool_)
     m, n = H.shape
     
@@ -40,7 +41,12 @@ def MC_erasure_plog_fixed_p(num_trials: int, state: nx.MultiGraph, p: float,
 
 def MC_erasure_plog(num_trials: int, state: nx.MultiGraph, p_vals: list[float], 
                     rank_method: bool=False, only_X: bool=False) -> dict:
-    c, v = bpt.sets(state)
+    c = [n for n, b in state.nodes(data='bipartite') if b == 0]
+    v = [n for n, b in state.nodes(data='bipartite') if b == 1]
     shape = (len(c), len(v))
     edgelist = list(nx.Graph(state).edges(data=False))
-    return m4ri.MC_erasure_plog(shape, edgelist, num_trials, p_vals.tolist(), rank_method, only_X)
+    return m4ri.MC_erasure_plog(shape, edgelist, num_trials, p_vals, rank_method, only_X)
+
+if __name__ == '__main__':
+    state = bpt.configuration_model(aseq=[3]*4, bseq=[4]*3, seed=0, create_using=nx.MultiGraph)
+    print(MC_erasure_plog(10, state, np.array([0.0, 1.0])))

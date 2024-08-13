@@ -25,7 +25,7 @@ def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
     j = (a - E*i + ((i+2)*(i+1))//2)
     
     # apply cross-wiring 
-    edge_list = [(u, v) for u, v, _ in neighbor.edges]
+    edge_list = sorted(neighbor.edges(data=False))
     e1, e2 = edge_list[i], edge_list[j]
     (c1, n1), (c2, n2) = e1, e2
     f1, f2 = (c1, n2), (c2, n1)
@@ -57,22 +57,25 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable,
     theta = theta0
     cost = cost_function(theta)
     history, cost_history = [theta], [cost]
+    delta_history, temp_history = [], []
     
     for num_iterations in tqdm(range(max_iterations)):
         if cost < epsilon:
             break
         
-        temperature = schedule(num_iterations)
+        temperature = schedule(num_iterations/max_iterations)
 
         neighbor = random_neighbor(theta)
         neigh_cost = cost_function(neighbor)
-        delta_e = neigh_cost - cost
+        delta_cost = neigh_cost - cost
 
-        if npr.rand() < np.exp(-delta_e/temperature):
+        delta_history.append(delta_cost)
+        temp_history.append(temperature)
+        if npr.rand() < np.exp(-delta_cost/temperature):
             theta = neighbor
             cost = neigh_cost
     
         history.append(theta)
         cost_history.append(cost)
 
-    return history, cost_history
+    return history, cost_history, delta_history, temp_history

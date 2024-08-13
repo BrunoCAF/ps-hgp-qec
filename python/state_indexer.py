@@ -1,8 +1,6 @@
-from networkx import MultiGraph
 import numpy as np
 import networkx as nx
 import networkx.algorithms.bipartite as bpt
-import networkx.algorithms.isomorphism as iso
 import scipy.sparse as sp
 
 import pynauty as nauty
@@ -62,6 +60,17 @@ class GraphSerializer:
         H = bpt.biadjacency_matrix(G, row_order=np.arange(m)).astype(np.uint8).todense()
         return H.tobytes()
         
+    def deserialize_nauty(self, g: bytes) -> nx.MultiGraph:
+        # Reconstrua o grafo a partir do certificado canônico (string de adjacência)
+        G = nx.Graph()
+        lines = g.splitlines()
+        for i, line in enumerate(lines):
+            neighbors = line.split()
+            for neighbor in neighbors:
+                G.add_edge(i, int(neighbor))
+
+        return G
+    
     def deserialize_sparse(self, g: bytes) -> nx.MultiGraph:
         """
         Deserialize the biadjacency matrix into its sparse CSR format.

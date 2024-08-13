@@ -3,9 +3,11 @@ import numpy.random as npr
 import scipy.sparse as sp
 import networkx as nx
 import networkx.algorithms.bipartite as bpt
-import networkx.algorithms.isomorphism as iso
 
 from state_indexer import RewardCache
+from css_code_eval import MC_erasure_plog_fixed_p
+
+# TODO: implement graph canonization with Nauty
 
 class QECEnv:
     def __init__(self, tanner_graph_params: tuple[int, int, int], 
@@ -46,7 +48,7 @@ class QECEnv:
     def apply_action(self, edge_pair: tuple[int, int]):
         # cross-wire the two edges, i.e., update the state
         i, j = edge_pair
-        edge_list = [(u, v) for u, v, _ in self.state.edges]
+        edge_list = sorted(self.state.edges(data=False))
         e1, e2 = edge_list[i], edge_list[j]
         (c1, n1), (c2, n2) = e1, e2
         f1, f2 = (c1, n2), (c2, n1)
@@ -55,9 +57,21 @@ class QECEnv:
 
 
     def estimate_plog(self) -> float:
-        # this is where things get costly
-        # decode the HGP code defined by the current state
-        pass
+        # Decode the HGP code defined by the current state 
+        # via Monte Carlo simulation. 
+        
+        # Pick the number of trials large enough to have good estimates, 
+        # but not too large because it is computationally expensive. 
+        num_trials = 10000
+
+        # Pick the physical erasure rate such that the codes in mind 
+        # have some discriminative performance. Too high rates may be
+        # above the QEC threshold and the correction becomes worse than
+        # doing nothing. Too low rates lead to high relative error in 
+        # the MC simulation. 
+        p = 0.2
+
+        return MC_erasure_plog_fixed_p(num_trials, self.state, p)
 
     def compute_reward(self, plog_hat: float) -> float:
         # Sparse 0-1 threshold-based reward. 
