@@ -59,10 +59,10 @@ if __name__ == '__main__':
     C = args.C
     N, L = exploration_params[C] if (args.N is None or args.L is None) else (args.N, args.L)
     p = noise_levels[C] if args.p is None else args.p
-
+    # print(f"{C = }, {N = }, {L = }, {p = }")
+    
     # ------------------------------------------------------------------------------------
     states, values = [], []
-    print(f"{C = }, {N = }, {L = }, {p = }")
     cost_fn = lambda s: MC_erasure_plog_fixed_p(MC_budget, s, p)
 
     # Initialize the rw with the corresponding initial state. 
