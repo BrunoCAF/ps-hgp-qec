@@ -93,5 +93,5 @@ if __name__ == '__main__':
         grp = f.create_group(codes[C])
         grp.attrs['MC_budget'] = MC_budget
         grp.attrs['p'] = p
-        dset = grp.create_dataset("states", data=states)
-        dset = grp.create_dataset("values", data=values)
+        grp.create_dataset("states", data=states)
+        grp.create_dataset("values", data=values)
