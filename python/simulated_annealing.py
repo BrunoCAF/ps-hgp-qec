@@ -1,7 +1,6 @@
 import numpy as np
 import numpy.random as npr
 
-from scipy.special import comb
 import networkx as nx
 
 from typing import Callable
@@ -10,36 +9,9 @@ from tqdm import tqdm
 import h5py
 
 from css_code_eval import MC_erasure_plog
-from explore_space import load_tanner_graph, parse_edgelist
-from explore_space import codes, path_to_initial_codes, textfiles
-from explore_space import MC_budget, noise_levels
-
-def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
-    # Copy state
-    neighbor = nx.MultiGraph(theta)
-    
-    # get (multi)edge number from state theta
-    E = neighbor.number_of_edges()
-
-    # compute action space size
-    A = comb(E, 2, exact=True)
-    
-    # sample action
-    a = npr.choice(A)
-    
-    # convert to edge indices
-    i = np.floor(((2*E - 1) - np.sqrt((2*E-1)**2 - 8*a))//2).astype(int)
-    j = (a - E*i + ((i+2)*(i+1))//2)
-    
-    # apply cross-wiring 
-    edge_list = sorted(neighbor.edges(data=False))
-    e1, e2 = edge_list[i], edge_list[j]
-    (c1, n1), (c2, n2) = e1, e2
-    f1, f2 = (c1, n2), (c2, n1)
-    neighbor.remove_edges_from([e1, e2])
-    neighbor.add_edges_from([f1, f2])
-    
-    return neighbor
+from experiments_settings import load_tanner_graph, parse_edgelist, generate_neighbor
+from experiments_settings import codes, path_to_initial_codes, textfiles
+from experiments_settings import MC_budget, noise_levels
 
 def arctan_diff_schedule(t: int, coef: float=75.) -> float:
     return 1./(1 + coef*t**2)

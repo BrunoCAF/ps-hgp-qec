@@ -8,41 +8,12 @@ import argparse
 from tqdm import tqdm
 import h5py
 
-from simulated_annealing import generate_neighbor
 from css_code_eval import MC_erasure_plog_fixed_p
-
-path_to_initial_codes = '../initial_codes/'
-codes = ['[625,25]', '[1225,65]', '[1600,64]', '[2025,81]']
-textfiles = [f"HGP_(3,4)_{code}.txt" for code in codes]
-
-state_space_params = [(15, 20, 60), 
-                      (21, 28, 84), 
-                      (24, 32, 96), 
-                      (27, 36, 108)]
-
-MC_budget = int(1e4)
-noise_levels = [9/32, 8/32, 9/32, 12/32]
-# times: 15, 40, 80, 200
+from experiments_settings import load_tanner_graph, parse_edgelist, generate_neighbor
+from experiments_settings import codes, path_to_initial_codes, textfiles
+from experiments_settings import MC_budget, noise_levels
 
 exploration_params = [(24, 120), (15, 70), (12, 40), (8, 30)]
-
-def load_tanner_graph(filename):
-    m, n = np.loadtxt(filename, max_rows=1, dtype=int)
-    indices, indptr = np.array([], dtype=int), [0]
-    for r in range(m):
-        r_ind = np.loadtxt(filename, skiprows=r+1, max_rows=1, dtype=int)
-        indices = np.concatenate([indices, np.sort(r_ind)])
-        indptr.append(len(r_ind))
-    
-    H = sp.csr_array((m, n), dtype=int)
-    H.data = np.ones_like(indices, dtype=int)
-    H.indices = indices
-    H.indptr = np.cumsum(indptr)
-
-    return bpt.from_biadjacency_matrix(H, create_using=nx.MultiGraph)
-
-def parse_edgelist(state):
-    return np.array(sorted(state.edges(data=False)), dtype=np.uint8).flatten() # shape: (2*E,)
 
 
 if __name__ == '__main__':
