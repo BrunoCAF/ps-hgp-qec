@@ -22,6 +22,7 @@ state_space_params = [(15, 20, 60),
 
 MC_budget = int(1e4)
 noise_levels = [9/32, 8/32, 9/32, 12/32]
+# times: 15, 40, 80, 200
 
 exploration_params = [(24, 120), (15, 70), (12, 40), (8, 30)]
 
@@ -39,7 +40,6 @@ def load_tanner_graph(filename):
     H.indptr = np.cumsum(indptr)
 
     return bpt.from_biadjacency_matrix(H, create_using=nx.MultiGraph)
-
 
 def parse_edgelist(state):
     return np.array(sorted(state.edges(data=False)), dtype=np.uint8).flatten() # shape: (2*E,)
