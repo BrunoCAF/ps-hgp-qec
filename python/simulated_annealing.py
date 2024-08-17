@@ -78,9 +78,9 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable,
             std_history.append(std)
 
     if noisy_mode:
-        ret = (history, cost_history, delta_history, temp_history)
-    else:
         ret = (history, cost_history, std_history, delta_history, temp_history)
+    else:
+        ret = (history, cost_history, delta_history, temp_history)
 
     return ret
 
@@ -101,16 +101,17 @@ if __name__ == '__main__':
 
     # Choose the code family
     C = args.C
+    p = noise_levels[C] if args.p is None else args.p
+
     # The code family already defines some preferred values for max_iterations, epsilon, theta0
     epsilon = sim_ann_params['eps'][C]
     max_iter = sim_ann_params['max_iter'][C] if args.max_iter is None else args.max_iter
-    p = noise_levels[C] if args.p is None else args.p
     theta0 = load_tanner_graph(path_to_initial_codes+textfiles[C])
 
     # Choose the temperature scheduling beta coefficient
     beta = sim_ann_params['beta'][args.b]
     
-    # ------------------------------------------------------------------------------------
+    # Define cost and scheduling functions
     cost_fn = lambda s: MC_erasure_plog(MC_budget, s, [p]) # notice that this version returns both mean and std
     sched_fn = lambda t: arctan_diff_schedule(t, coef=beta)
 
@@ -130,10 +131,11 @@ if __name__ == '__main__':
     
     # Store results in HDF5 file
     with h5py.File("sim_ann.hdf5", "a") as f: 
-        grp = f.create_group(codes[C]+'/'+f'{beta=:.0f}')
-        grp.create_dataset("theta", data=thetas)
-        grp.create_dataset("cost", data=costs)
-        grp.create_dataset("std", data=stds)
-        grp.create_dataset("delta", data=deltas)
-        grp.create_dataset("temp", data=temps)
+        grp = f.require_group(codes[C])
+        subgrp = grp.create_group(f'{beta=:.0f}')
+        subgrp.create_dataset("theta", data=thetas)
+        subgrp.create_dataset("cost", data=costs)
+        subgrp.create_dataset("std", data=stds)
+        subgrp.create_dataset("delta", data=deltas)
+        subgrp.create_dataset("temp", data=temps)
         
