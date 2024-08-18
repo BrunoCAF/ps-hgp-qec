@@ -8,7 +8,7 @@ import argparse
 from tqdm import tqdm
 import h5py
 
-from css_code_eval import MC_erasure_plog_fixed_p
+from css_code_eval import MC_erasure_plog
 from experiments_settings import load_tanner_graph, parse_edgelist, generate_neighbor
 from experiments_settings import codes, path_to_initial_codes, textfiles
 from experiments_settings import MC_budget, noise_levels
@@ -33,8 +33,8 @@ if __name__ == '__main__':
     # print(f"{C = }, {N = }, {L = }, {p = }")
     
     # ------------------------------------------------------------------------------------
-    states, values = [], []
-    cost_fn = lambda s: MC_erasure_plog_fixed_p(MC_budget, s, p)
+    states, values, stds = [], [], []
+    cost_fn = lambda s: MC_erasure_plog(MC_budget, s, [p])
 
     # Initialize the rw with the corresponding initial state. 
     state = load_tanner_graph(path_to_initial_codes+textfiles[C])
@@ -43,26 +43,34 @@ if __name__ == '__main__':
     for l in tqdm(range(L)):
         if l > 0:
             state = generate_neighbor(state)
-        value = cost_fn(state)
+        stat = cost_fn(state)
+        value = stat['mean'][0]
+        std = stat['std'][0]
         
         states.append(parse_edgelist(state))
         values.append(value)
+        stds.append(std)
 
         # Neighborhood exploration
         for n in tqdm(range(N-1)):
             neighbor = generate_neighbor(state)
-            value = cost_fn(neighbor)
+            stat = cost_fn(neighbor)
+            value = stat['mean'][0]
+            std = stat['std'][0]
         
-            states.append(parse_edgelist(state))
+            states.append(parse_edgelist(neighbor))
             values.append(value)
+            stds.append(std)
 
     # Exploration finished: store results in hdf5 file
     states = np.row_stack(states, dtype=np.uint8)
     values = np.row_stack(values, dtype=np.float64)
+    stds = np.row_stack(stds, dtype=np.float64)
     
     with h5py.File("exploration.hdf5", "a") as f: 
-        grp = f.create_group(codes[C])
+        grp = f.require_group(codes[C])
         grp.attrs['MC_budget'] = MC_budget
         grp.attrs['p'] = p
         grp.create_dataset("states", data=states)
         grp.create_dataset("values", data=values)
+        grp.create_dataset("stds", data=values)
