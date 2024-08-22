@@ -34,8 +34,22 @@ def load_tanner_graph(filename: str) -> nx.MultiGraph:
 
     return bpt.from_biadjacency_matrix(H, create_using=nx.MultiGraph)
 
+
 def parse_edgelist(state: nx.MultiGraph) -> np.ndarray:
     return np.array(sorted(state.edges(data=False)), dtype=np.uint8).flatten() # shape: (2*E,)
+
+
+def from_edgelist(edgelist: np.ndarray) -> nx.MultiGraph:
+    diam = lambda arr: np.max(arr) - np.min(arr) + 1
+    m, n = np.apply_along_axis(diam, 0, edgelist.reshape(-1,2))
+
+    B = nx.MultiGraph()
+    B.add_nodes_from(np.arange(m), bipartite=0)
+    B.add_nodes_from(np.arange(m, m+n-1), bipartite=1)
+    B.add_edges_from([tuple(r) for r in edgelist.reshape(-1, 2)])
+
+    return B
+
 
 def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
     # Copy state
