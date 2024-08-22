@@ -87,7 +87,7 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable,
 
 sim_ann_params = {'eps': [80e-4, 5e-4, 15e-4, 1e-4], 
                   'max_iter': [2400, 900, 450, 180], 
-                  'beta': [50, 100, 200, 400]}
+                  'beta': [5, 10, 25, 50, 100, 200, 400]}
 
 if __name__ == '__main__':
     # Parse args: -C (Code family to optimize), -L (Length of the optimization i.e. max_iterations), 

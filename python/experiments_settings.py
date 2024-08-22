@@ -19,7 +19,7 @@ MC_budget = int(1e4)
 noise_levels = [9/32, 8/32, 9/32, 12/32]
 # times: 15, 40, 80, 200
 
-def load_tanner_graph(filename):
+def load_tanner_graph(filename: str) -> nx.MultiGraph:
     m, n = np.loadtxt(filename, max_rows=1, dtype=int)
     indices, indptr = np.array([], dtype=int), [0]
     for r in range(m):
@@ -34,7 +34,7 @@ def load_tanner_graph(filename):
 
     return bpt.from_biadjacency_matrix(H, create_using=nx.MultiGraph)
 
-def parse_edgelist(state):
+def parse_edgelist(state: nx.MultiGraph) -> np.ndarray:
     return np.array(sorted(state.edges(data=False)), dtype=np.uint8).flatten() # shape: (2*E,)
 
 def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
