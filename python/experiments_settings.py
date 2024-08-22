@@ -41,13 +41,12 @@ def parse_edgelist(state: nx.MultiGraph) -> np.ndarray:
 
 def from_edgelist(edgelist: np.ndarray) -> nx.MultiGraph:
     diam = lambda arr: np.max(arr) - np.min(arr) + 1
-    toint = lambda R: (int(r) for r in R)
     m, n = np.apply_along_axis(diam, 0, edgelist.reshape(-1,2))
 
     B = nx.MultiGraph()
     B.add_nodes_from(np.arange(m), bipartite=0)
     B.add_nodes_from(np.arange(m, m+n), bipartite=1)
-    B.add_edges_from([tuple(toint(r)) for r in edgelist.reshape(-1, 2)])
+    B.add_edges_from([tuple(r) for r in edgelist.reshape(-1, 2)])
 
     return B
 

@@ -469,7 +469,7 @@ int parse_edgelist(PyObject *edgelist, void *vec){
             return 0;
         }
         PyObject *u = PyTuple_GetItem(tuple_obj, 0), *v = PyTuple_GetItem(tuple_obj, 1);
-        if (PyLong_Check(u) && PyLong_Check(v)) {
+        if (PyArray_IsIntegerScalar(u) && PyArray_IsIntegerScalar(v)) {
             V->emplace_back((int)PyLong_AsLong(u), (int)PyLong_AsLong(v));
         } else {
             PyErr_SetString(PyExc_TypeError, "Tuples must contain integers");
