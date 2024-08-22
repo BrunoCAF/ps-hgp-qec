@@ -73,4 +73,4 @@ if __name__ == '__main__':
         grp.attrs['p'] = p
         grp.create_dataset("states", data=states)
         grp.create_dataset("values", data=values)
-        grp.create_dataset("stds", data=values)
+        grp.create_dataset("stds", data=stds)
