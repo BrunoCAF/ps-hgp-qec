@@ -45,7 +45,7 @@ def from_edgelist(edgelist: np.ndarray) -> nx.MultiGraph:
 
     B = nx.MultiGraph()
     B.add_nodes_from(np.arange(m), bipartite=0)
-    B.add_nodes_from(np.arange(m, m+n-1), bipartite=1)
+    B.add_nodes_from(np.arange(m, m+n), bipartite=1)
     B.add_edges_from([tuple(r) for r in edgelist.reshape(-1, 2)])
 
     return B
