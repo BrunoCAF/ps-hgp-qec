@@ -31,5 +31,5 @@ if __name__ == '__main__':
         grp = f.require_group(grpname[C])
         subgrp = grp.require_group(subgrpname[b])
         subgrp.create_dataset("mean", data=results['mean'])
-        subgrp.create_dataset("std", data=results['mean'])
+        subgrp.create_dataset("std", data=results['std'])
     
