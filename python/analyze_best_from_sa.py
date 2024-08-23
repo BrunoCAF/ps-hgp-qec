@@ -7,7 +7,7 @@ import numpy as np
 grpname = codes
 subgrpname = ['initial'] + [f"{beta=:.0f}" for beta in [50, 100, 200, 400]]
 p_vals = np.linspace(0.1, 0.5, 15)
-MC_budget = [int(1e6), int(1e5), int(1e5), int(1e4)]
+MC_budget = [int(5e5), int(1e5), int(1e5), int(5e4)]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
