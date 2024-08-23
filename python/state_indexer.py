@@ -3,8 +3,6 @@ import networkx as nx
 import networkx.algorithms.bipartite as bpt
 import scipy.sparse as sp
 
-import pynauty as nauty
-# TODO: test graph canonization using nauty, write deserialize nauty, etc
 
 class GraphSerializer:
     def __init__(self, graph_dims: tuple[int, int], serialization='nauty'):
@@ -17,24 +15,9 @@ class GraphSerializer:
         self.graph_dims = graph_dims
         serialization_methods = {'sparse': self.serialize_sparse, 
                                  'dense': self.serialize_dense,
-                                 'nauty': self.serialize_nauty, 
                                 }
         self.serialize = serialization_methods[serialization]
 
-    def serialize_nauty(self, G: nx.MultiGraph) -> bytes:
-        """
-        Serialize the state multigraph via graph canonization with Nauty. 
-        The state is first converted into a simple graph. 
-
-        :param G: A MultiGraph object representing the state.
-        :return: The serialized canonical form of the graph as bytes.
-        """
-        GG = nx.Graph(G)
-        g = nauty.Graph(
-            number_of_vertices=GG.number_of_nodes(),
-            adjacency_dict={i: list(GG.neighbors(i)) for i in range(GG.number_of_nodes())}
-        )
-        return nauty.certificate(g)
 
     def serialize_sparse(self, G: nx.MultiGraph) -> bytes:
         """
@@ -60,16 +43,6 @@ class GraphSerializer:
         H = bpt.biadjacency_matrix(G, row_order=np.arange(m)).astype(np.uint8).todense()
         return H.tobytes()
         
-    def deserialize_nauty(self, g: bytes) -> nx.MultiGraph:
-        # Reconstrua o grafo a partir do certificado canônico (string de adjacência)
-        G = nx.Graph()
-        lines = g.splitlines()
-        for i, line in enumerate(lines):
-            neighbors = line.split()
-            for neighbor in neighbors:
-                G.add_edge(i, int(neighbor))
-
-        return G
     
     def deserialize_sparse(self, g: bytes) -> nx.MultiGraph:
         """
