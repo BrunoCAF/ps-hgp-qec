@@ -5,7 +5,7 @@ import argparse
 import numpy as np
 
 grpname = codes
-subgrpname = ['initial'] + [f"{beta=:.0f}" for beta in [50, 100, 200, 400]]
+subgrpname = [f"{beta=:.0f}" for beta in [5, 10, 25, 50, 100, 200, 400]] + ['initial']
 p_vals = np.linspace(0.1, 0.5, 15)
 MC_budget = [int(5e5), int(1e5), int(1e5), int(5e4)]
 

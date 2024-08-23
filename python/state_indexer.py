@@ -5,19 +5,18 @@ import scipy.sparse as sp
 
 
 class GraphSerializer:
-    def __init__(self, graph_dims: tuple[int, int], serialization='nauty'):
+    def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
         """
         Initialize the GraphSerializer.
 
         :param graph_dims: The shape of the dense biadjacency matrix representing the graph.
-        :param serialization: The serialization method to be employed, 'sparse'|'dense'|'nauty'.
+        :param serialization: The serialization method to be employed, 'sparse'|'dense'.
         """
         self.graph_dims = graph_dims
         serialization_methods = {'sparse': self.serialize_sparse, 
                                  'dense': self.serialize_dense,
                                 }
         self.serialize = serialization_methods[serialization]
-
 
     def serialize_sparse(self, G: nx.MultiGraph) -> bytes:
         """
@@ -42,8 +41,7 @@ class GraphSerializer:
         m = self.graph_dims[0]
         H = bpt.biadjacency_matrix(G, row_order=np.arange(m)).astype(np.uint8).todense()
         return H.tobytes()
-        
-    
+           
     def deserialize_sparse(self, g: bytes) -> nx.MultiGraph:
         """
         Deserialize the biadjacency matrix into its sparse CSR format.
@@ -116,7 +114,7 @@ class RewardCache:
     before computing the reward, so the cache index may differ from the state
     index. 
     """
-    def __init__(self, graph_dims: tuple[int, int], serialization='nauty'):
+    def __init__(self, graph_dims: tuple[int, int], serialization='sparse'):
         self.GS = GraphSerializer(graph_dims, serialization)
         self.cache = {}
 
