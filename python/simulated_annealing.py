@@ -13,7 +13,7 @@ from experiments_settings import load_tanner_graph, parse_edgelist, generate_nei
 from experiments_settings import codes, path_to_initial_codes, textfiles
 from experiments_settings import MC_budget, noise_levels
 
-def arctan_diff_schedule(t: int, coef: float=75.) -> float:
+def arctan_diff_schedule(t: int, coef: float=10.) -> float:
     return 1./(1 + coef*t**2)
 
 def simulated_annealing(cost_function: Callable, random_neighbor: Callable, 
@@ -62,11 +62,11 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable,
         else:
             neigh_cost = cost_function(neighbor)
         
-        delta_cost = neigh_cost - cost
+        delta_log_cost = np.log(neigh_cost) - np.log(cost)
 
-        delta_history.append(delta_cost)
+        delta_history.append(delta_log_cost)
         temp_history.append(temperature)
-        if npr.rand() < np.exp(-delta_cost/temperature):
+        if npr.rand() < np.exp(-delta_log_cost/temperature):
             theta = neighbor
             cost = neigh_cost
             if noisy_mode:
@@ -85,9 +85,9 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable,
     return ret
 
 
-sim_ann_params = {'eps': [80e-4, 5e-4, 15e-4, 1e-4], 
+sim_ann_params = {'eps': [80e-4, 5e-4, 15e-4, 250e-4], 
                   'max_iter': [2400, 900, 450, 180], 
-                  'beta': [5, 10, 25, 50, 100, 200, 400]}
+                  'beta': [1, 4, 7, 10]}
 
 if __name__ == '__main__':
     # Parse args: -C (Code family to optimize), -L (Length of the optimization i.e. max_iterations), 
@@ -130,7 +130,7 @@ if __name__ == '__main__':
     temps = np.row_stack(temp_hist)
     
     # Store results in HDF5 file
-    with h5py.File("sim_ann.hdf5", "a") as f: 
+    with h5py.File("sim_ann_deltalog.hdf5", "a") as f: 
         grp = f.require_group(codes[C])
         subgrp = grp.create_group(f'{beta=:.0f}')
         subgrp.create_dataset("theta", data=thetas)
