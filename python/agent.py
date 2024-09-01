@@ -22,7 +22,7 @@ class PSAgent:
         # The state space params consist of the numbers of nodes and 
         # edges of the Tanner graph defining the classical codes
         m, n, E = self.state_space_params
-        self.S, self.A = min(1<<30, comb(m*n, E, exact=True)), comb(E, 2, exact=True)
+        self.S, self.A = min(1<<8, comb(m*n, E, exact=True)), comb(E, 2, exact=True)
         # CSR format is good for arithmetic and row-slicing (update weights and sample actions)
         self.h_matrix = sp.csr_array((self.S, self.A), dtype=np.float64)
         # DOK format is good for entry-wise incremental construction of the matrix
