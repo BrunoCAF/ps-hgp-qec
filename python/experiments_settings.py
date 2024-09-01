@@ -51,7 +51,8 @@ def from_edgelist(edgelist: np.ndarray) -> nx.MultiGraph:
     return B
 
 
-def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
+
+def generate_neighbor_highlight(theta: nx.MultiGraph) -> tuple[nx.MultiGraph, tuple]:
     # Copy state
     neighbor = nx.MultiGraph(theta)
     
@@ -76,4 +77,9 @@ def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
     neighbor.remove_edges_from([e1, e2])
     neighbor.add_edges_from([f1, f2])
     
+    return neighbor, [e1, e2], [f1, f2]
+
+
+def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
+    neighbor, *_ = generate_neighbor_highlight(theta)
     return neighbor
