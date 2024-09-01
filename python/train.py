@@ -157,7 +157,7 @@ if __name__ == '__main__':
 
     print('Summary of options:')
     print(f'Code family: {codes[C]} | # of episodes: {N} | max ep length: {L}')
-    print(f'MC trials: {MC_budget:.0g} | erasure rate: {erasure_rate:.2f}')
+    print(f'MC trials: {MC_budget:.0g} | erasure rate: {erasure_rate:.2f} | P_log threshold: {plog_threshold:.0g}')
     print(f'Agent params: {beta = :.3g}, {eta = :.3g}, {gamma = :.3g}')
 
     # Initialize Interaction, train and save results
