@@ -20,16 +20,12 @@ class GraphSerializer:
 
     def serialize_sparse(self, G: nx.MultiGraph) -> bytes:
         """
-        Serialize the biadjacency matrix from its sparse CSR format. 
-        Since the shape of the matrix is known, dump only indptr, indices, and data.
+        Serialize the list of edges of the graph.
 
         :param G: A MultiGraph object representing the state.
-        :return: The serialized biadjacency matrix as bytes.
+        :return: The serialized edge list as bytes.
         """
-        m = self.graph_dims[0]
-        H = bpt.biadjacency_matrix(G, row_order=np.arange(m)).astype(np.uint8)
-        std_serial = lambda x: x.astype(np.uint8).tobytes()
-        return std_serial(H.indptr) + std_serial(H.indices) + std_serial(H.data)
+        return np.array(sorted(G.edges(data=False)), dtype=np.uint8).flatten().tobytes()
 
     def serialize_dense(self, G: nx.MultiGraph) -> bytes:
         """
@@ -38,26 +34,26 @@ class GraphSerializer:
         :param G: A MultiGraph object representing the state.
         :return: The serialized biadjacency matrix as bytes.
         """
-        m = self.graph_dims[0]
-        H = bpt.biadjacency_matrix(G, row_order=np.arange(m)).astype(np.uint8).todense()
+        m, n = self.graph_dims
+        H = bpt.biadjacency_matrix(G, row_order=np.arange(m), column_order=np.arange(m, m+n)).astype(np.uint8).todense()
         return H.tobytes()
            
     def deserialize_sparse(self, g: bytes) -> nx.MultiGraph:
         """
-        Deserialize the biadjacency matrix into its sparse CSR format.
+        Deserialize the edge list back into the graph.
 
-        :param g: The serialized biadjacency matrix as bytes.
+        :param g: The serialized edge list as bytes.
         :return: A MultiGraph object.
         """
-        indptr_len = self.graph_dims[0] + 1
-        data_len = (len(g) - indptr_len)//2
+        m, n = self.graph_dims
+        edgelist = np.frombuffer(g, dtype=np.uint8)
         
-        indptr = np.frombuffer(g[:indptr_len], dtype=np.uint8)
-        indices = np.frombuffer(g[indptr_len:][:data_len], dtype=np.uint8)
-        data = np.frombuffer(g[indptr_len:][data_len:], dtype=np.uint8)
+        G = nx.MultiGraph()
+        G.add_nodes_from(np.arange(m), bipartite=0)
+        G.add_nodes_from(np.arange(m, m+n), bipartite=1)
+        G.add_edges_from([tuple(r) for r in edgelist.reshape(-1, 2)])
         
-        H = sp.csr_matrix((data, indices, indptr), shape=self.graph_dims)
-        return bpt.from_biadjacency_matrix(H, create_using=nx.MultiGraph)
+        return G
 
     def deserialize_dense(self, g: bytes) -> nx.MultiGraph:
         """
@@ -103,6 +99,9 @@ class StateIndexer:
             self.storage[skey] = self.next_index
             self.next_index += 1
         return self.next_index - 1
+    
+    def invert_index(self) -> dict[int, bytes]:
+        return {i: sk for sk, i in self.storage.items()}
 
         
 
