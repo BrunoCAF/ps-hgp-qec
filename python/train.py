@@ -58,8 +58,8 @@ class Interaction:
             grp.create_dataset('h_indices', data=self.agent.h_matrix.indices)
             grp.create_dataset('h_indptr', data=self.agent.h_matrix.indptr)
 
-            grp.create_dataset('g_keys', data=np.array(list(self.agent.g_matrix.keys), dtype='i,i'))
-            grp.create_dataset('g_vals', data=np.array(list(self.agent.g_matrix.values)))
+            grp.create_dataset('g_keys', data=np.array(list(self.agent.g_matrix.keys()), dtype='i,i'))
+            grp.create_dataset('g_vals', data=np.array(list(self.agent.g_matrix.values())))
 
             # Save full training history and episode lengths
             print('Saving data from training...')
@@ -107,7 +107,7 @@ ps_params = {'plog_thres_hard': [1.5e-2, 2e-3, 3e-3, 3e-2],
              'eta': [1, 1/2, 1/4], 
              'gamma': [1, 3/4, 1/2]}
 
-# Estimated time per step: [15, 45, 85, 195]
+# Estimated time per step: [25, 60, 100, 210]
 # Approx limit of evals: [2280, 760, 400, 175]
 
 def set_agent_params(A: int, b: int, e: int, g: int, L: int) -> tuple[float, float, float]:
