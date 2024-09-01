@@ -119,7 +119,7 @@ def set_agent_params(A: int, b: int, e: int, g: int, L: int) -> tuple[float, flo
     return beta, eta, gamma
 
 
-if __name__ == 'main':
+if __name__ == '__main__':
     # Parse args: 
     # Environment params: initial code, MC_budget, erasure rate, plog threshold
     # Agent params: gamma damping, eta glow damping, softmax beta
