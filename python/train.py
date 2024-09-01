@@ -99,8 +99,8 @@ class Interaction:
         
 
 
-ps_params = {'plog_thres_hard': [1.5e-2, 2e-3, 3e-3, 3e-2], 
-             'plog_thres_easy': [2e-2, 5e-3, 5e-3, 4e-2], 
+ps_params = {'plog_thres_hard': [1e-2, 1e-3, 2e-3, 3e-2], 
+             'plog_thres_easy': [2e-2, 3e-3, 4e-3, 4e-2], 
              'num_episodes': [20, 10, 8, 5], 
              'steps_per_episode': [120, 70, 50, 35], 
              'beta': [2., 1., 0.5], 
