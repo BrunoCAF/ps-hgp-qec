@@ -24,9 +24,9 @@ class PSAgent:
         m, n, E = self.state_space_params
         self.S, self.A = min(1<<30, comb(m*n, E, exact=True)), comb(E, 2, exact=True)
         # CSR format is good for arithmetic and row-slicing (update weights and sample actions)
-        self.h_matrix = sp.csr_array((self.S, self.A), dtype=np.float128)
+        self.h_matrix = sp.csr_array((self.S, self.A), dtype=np.float64)
         # DOK format is good for entry-wise incremental construction of the matrix
-        self.g_matrix = sp.dok_array((self.S, self.A), dtype=np.float128)
+        self.g_matrix = sp.dok_array((self.S, self.A), dtype=np.float64)
 
     def learn_and_act(self, observation: nx.MultiGraph, reward: float) -> tuple[int, int]:
         # Update h matrix
