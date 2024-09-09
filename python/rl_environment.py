@@ -64,8 +64,11 @@ class QECEnv:
 
     def compute_reward(self, plog_hat: float) -> float:
         # Sparse 0-1 threshold-based reward. 
-        return float(plog_hat < self.plog_threshold)
+        # return float(plog_hat < self.plog_threshold)
+        return np.floor(np.log(self.plog_threshold / plog_hat))
 
     def done(self, reward: float) -> bool:
         # The episode is terminated as soon as the code achieves the desired Plog
-        return reward > 0
+        # return reward > 0
+        # No early termination
+        return False
