@@ -837,7 +837,7 @@ if __name__ == '__main__':
     Hx, Hz = Hx.todense(), Hz.todense()
 
     print(f'Code params: {code} | Family: {names[F]}')
-    print(f'Error rate: 10^{np.log10(er):.2f}')
+    print(f'Error rate: 10^{np.log10(er):.2f} | MC budget: 10^{np.log10(MC):.0f} trials')
 
     # # Set BP+OSD params and run simulations
     # params = {
