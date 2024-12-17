@@ -839,26 +839,26 @@ if __name__ == '__main__':
     print(f'Code params: {code} | Family: {names[F]}')
     print(f'Error rate: 10^{np.log10(er):.2f} | MC budget: 10^{np.log10(MC):.0f} trials')
 
-    # # Set BP+OSD params and run simulations
-    # params = {
-    #     "error_rate": er, #the physical error rate on the qubits
-    #     "target_runs": MC, #the number of cycles to simulate
-    #     'max_iter': int(Hx.shape[1]/10), #the interation depth for BP
-    #     'tqdm_disable': True #show live stats
-    # }
-    # simulation = css_decode_sim(hx=Hx, hz=Hz, **params).output_dict()
+    # Set BP+OSD params and run simulations
+    params = {
+        "error_rate": er, #the physical error rate on the qubits
+        "target_runs": MC, #the number of cycles to simulate
+        'max_iter': int(Hx.shape[1]/10), #the interation depth for BP
+        'tqdm_disable': True #show live stats
+    }
+    simulation = css_decode_sim(hx=Hx, hz=Hz, **params).output_dict()
 
-    # # Collect results
-    # ler, ler_eb = simulation["osdw_logical_error_rate"], simulation["osdw_logical_error_rate_eb"]
+    # Collect results
+    ler, ler_eb = simulation["osdw_logical_error_rate"], simulation["osdw_logical_error_rate_eb"]
     
-    # # Save results
-    # ler = np.array([ler], dtype=float)
-    # ler_eb = np.array([ler_eb], dtype=float)
+    # Save results
+    ler = np.array([ler], dtype=float)
+    ler_eb = np.array([ler_eb], dtype=float)
 
-    # with h5py.File("bposd_simulations.hdf5", "a") as f: 
-    #     grp = f.require_group(names[F])
-    #     subgrp = grp.require_group(code)
-    #     subsubgrp = subgrp.require_group(f'ER={E}')
-    #     subsubgrp.create_dataset("ler", data=ler)
-    #     subsubgrp.create_dataset("ler_eb", data=ler_eb)
+    with h5py.File("bposd_simulations.hdf5", "a") as f: 
+        grp = f.require_group(names[F])
+        subgrp = grp.require_group(code)
+        subsubgrp = subgrp.require_group(f'ER={E}')
+        subsubgrp.create_dataset("ler", data=ler)
+        subsubgrp.create_dataset("ler_eb", data=ler_eb)
     
