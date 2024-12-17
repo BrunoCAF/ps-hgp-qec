@@ -855,18 +855,10 @@ if __name__ == '__main__':
     ler = np.array([ler], dtype=float)
     ler_eb = np.array([ler_eb], dtype=float)
 
-    for attempt in range(5):  # Retry 5 times
-        try:
-            with h5py.File("bposd_simulations.hdf5", "a") as f: 
-                grp = f.require_group(names[F])
-                subgrp = grp.require_group(code)
-                subsubgrp = subgrp.require_group(f'ER={E}')
-                subsubgrp.create_dataset("ler", data=ler)
-                subsubgrp.create_dataset("ler_eb", data=ler_eb)
-            break
-        except BlockingIOError:
-            print(f"Attempt {attempt + 1} failed. Retrying...")
-            time.sleep(2 ** attempt)  # Exponential backoff
-    else:
-        raise RuntimeError("Failed to access the file after 5 attempts")
+    with h5py.File("output/bposd_simulations.hdf5", "a") as f: 
+        grp = f.require_group(names[F])
+        subgrp = grp.require_group(code)
+        subsubgrp = subgrp.require_group(f'ER={E}')
+        subsubgrp.create_dataset("ler", data=ler)
+        subsubgrp.create_dataset("ler_eb", data=ler_eb)
     
