@@ -815,7 +815,11 @@ for name in names:
     with open(name+'.pkl', 'rb') as f:
         objs.append(pickle.load(f))
 
-error_rates = np.logspace(-2, -1, 10)
+codes = ['[625,25]', '[1600,64]', '[2025,81]']
+
+error_rates = [np.logspace(-1.2, -0.8, 15), 
+               np.logspace(-1.2, -0.8, 15), 
+               np.logspace(-1.1, -0.9, 15)]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -830,7 +834,7 @@ if __name__ == '__main__':
 
     family = objs[F]
     code = list(family.keys())[C]
-    er = error_rates[E]
+    er = error_rates[C][E]
 
     # Define CSS code via HGP construction
     Hx, Hz = HGP(family[code])
@@ -855,7 +859,8 @@ if __name__ == '__main__':
     ler = np.array([ler], dtype=float)
     ler_eb = np.array([ler_eb], dtype=float)
 
-    with h5py.File("output/bposd_simulations.hdf5", "a") as f: 
+    time.sleep(E)
+    with h5py.File("bposd_simulations.hdf5", "a") as f: 
         grp = f.require_group(names[F])
         subgrp = grp.require_group(code)
         subsubgrp = subgrp.require_group(f'ER={E}')
