@@ -807,7 +807,7 @@ import argparse
 
 import pickle
 
-names = ["PEG_codes", "SA_codes", "PS_codes"]
+names = ["PEG_codes", "SA_codes", "PS_codes", "PE_codes"]
 objs = []
 for name in names:
 #     with open(name+'.pkl', 'wb') as f:
@@ -817,9 +817,9 @@ for name in names:
 
 codes = ['[625,25]', '[1600,64]', '[2025,81]']
 
-error_rates = [np.logspace(-1.5, -1, 15), 
-               np.logspace(-1.5, -1, 15), 
-               np.logspace(-1.5, -1, 15)]
+error_rates = [np.logspace(-2.0, -1, 20), 
+               np.logspace(-2.0, -1, 20), 
+               np.logspace(-2.0, -1, 20)]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -831,6 +831,9 @@ if __name__ == '__main__':
 
     # Choose the code family, code length, error rate, MC budget
     F, C, E, MC = args.F, args.C, args.E, args.MC
+    # Increase the budget for small codes
+    if C == 0:
+        MC *= 10
 
     family = objs[F]
     code = list(family.keys())[C]
