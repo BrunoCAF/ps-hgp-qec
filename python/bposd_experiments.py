@@ -817,16 +817,16 @@ for name in names:
 
 codes = ['[625,25]', '[1600,64]', '[2025,81]']
 
-error_rates = [np.logspace(-1.2, -0.8, 15), 
-               np.logspace(-1.2, -0.8, 15), 
-               np.logspace(-1.1, -0.9, 15)]
+error_rates = [np.logspace(-1.5, -1, 15), 
+               np.logspace(-1.5, -1, 15), 
+               np.logspace(-1.5, -1, 15)]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-F', action="store", dest='F', default=0, type=int, required=True)
     parser.add_argument('-C', action="store", dest='C', default=0, type=int, required=True)
     parser.add_argument('-E', action="store", dest='E', default=0, type=int, required=True)
-    parser.add_argument('-M', action="store", dest='MC', default=int(1e3), type=int)
+    parser.add_argument('-M', action="store", dest='MC', default=int(1e4), type=int)
     args = parser.parse_args()
 
     # Choose the code family, code length, error rate, MC budget
