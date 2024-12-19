@@ -817,9 +817,9 @@ for name in names:
 
 codes = ['[625,25]', '[1600,64]', '[2025,81]']
 
-error_rates = [np.logspace(-2.0, -1, 20), 
-               np.logspace(-2.0, -1, 20), 
-               np.logspace(-2.0, -1, 20)]
+error_rates = [np.logspace(-2, -1, 20), 
+               np.logspace(-2, -1, 20), 
+               np.logspace(-2, -1, 20)]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
