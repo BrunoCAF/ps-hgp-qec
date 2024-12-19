@@ -857,6 +857,9 @@ if __name__ == '__main__':
 
     # Collect results
     ler, ler_eb = simulation["osdw_logical_error_rate"], simulation["osdw_logical_error_rate_eb"]
+    bp_ler, bp_ler_eb = simulation["bp_logical_error_rate"], simulation["bp_logical_error_rate_eb"]
+    bp_x_conv_rate = simulation["bp_converge_count_x"]/simulation["run_count"]
+    bp_z_conv_rate = simulation["bp_converge_count_z"]/simulation["run_count"]
     
     # Save results
     ler = np.array([ler], dtype=float)
@@ -869,4 +872,8 @@ if __name__ == '__main__':
         subsubgrp = subgrp.require_group(f'ER={E}')
         subsubgrp.create_dataset("ler", data=ler)
         subsubgrp.create_dataset("ler_eb", data=ler_eb)
+        subsubgrp.create_dataset("bp_ler", data=bp_ler)
+        subsubgrp.create_dataset("bp_ler_eb", data=bp_ler_eb)
+        subsubgrp.create_dataset("bp_x_conv_rate", data=bp_x_conv_rate)
+        subsubgrp.create_dataset("bp_z_conv_rate", data=bp_z_conv_rate)
     
