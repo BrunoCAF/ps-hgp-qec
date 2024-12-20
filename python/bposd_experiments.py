@@ -462,6 +462,10 @@ class css_decode_sim():
             synd_z = self.hx@self.error_z % 2
             self.bpd_z.decode(synd_z)
 
+            self.bpd_z_bp_decoding = self.bpd_z.bp_decoding
+            self.bpd_z_osd0_decoding = self.bpd_z.osd0_decoding
+            self.bpd_z_osdw_decoding = self.bpd_z.osdw_decoding
+            
             #update the channel probability
             self._channel_update(self.channel_update)
 
@@ -474,6 +478,10 @@ class css_decode_sim():
             # decode x
             synd_x = self.hz@self.error_x % 2
             self.bpd_x.decode(synd_x)
+
+            self.bpd_x_bp_decoding = self.bpd_x.bp_decoding
+            self.bpd_x_osd0_decoding = self.bpd_x.osd0_decoding
+            self.bpd_x_osdw_decoding = self.bpd_x.osdw_decoding
             
             #update the channel probability
             self._channel_update(self.channel_update)
@@ -482,7 +490,33 @@ class css_decode_sim():
             synd_z = self.hx@self.error_z % 2
             self.bpd_z.decode(synd_z)
 
+        self.synd_x = synd_x
+        self.synd_z = synd_z
+
+        self.bpd_x_bp_decoding = self.bpd_x.bp_decoding
+        self.bpd_z_bp_decoding = self.bpd_z.bp_decoding
+        self.bpd_x_osd0_decoding = self.bpd_x.osd0_decoding
+        self.bpd_z_osd0_decoding = self.bpd_z.osd0_decoding
+        self.bpd_x_osdw_decoding = self.bpd_x.osdw_decoding
+        self.bpd_z_osdw_decoding = self.bpd_z.osdw_decoding
+    
         #compute the logical and word error rates
+        if not (self.synd_x.any() or self.synd_z.any()):
+            self.bpd_x_bp_decoding *= 0
+            self.bpd_z_bp_decoding *= 0
+            self.bpd_x_osd0_decoding *= 0
+            self.bpd_z_osd0_decoding *= 0
+            self.bpd_x_osdw_decoding *= 0
+            self.bpd_z_osdw_decoding *= 0
+
+        self.bpd_x_converge = self.bpd_x.converge
+        self.bpd_z_converge = self.bpd_z.converge
+        
+        if not self.synd_x.any():
+            self.bpd_x_converge = True
+        if not self.synd_z.any():
+            self.bpd_z_converge = True
+        
         self._encoded_error_rates()
 
     def _channel_update(self,update_direction):
@@ -496,7 +530,7 @@ class css_decode_sim():
         if update_direction=="x->z":
             decoder_probs=np.zeros(self.N)
             for i in range(self.N):
-                if self.bpd_x.osdw_decoding[i]==1:
+                if self.bpd_x_osdw_decoding[i]==1:
                     if (self.channel_probs_x[i]+self.channel_probs_y[i])==0:
                         decoder_probs[i]=0
                     else:
@@ -508,10 +542,9 @@ class css_decode_sim():
 
         #z component first, then x component
         elif update_direction=="z->x":
-            self.bpd_z.osdw_decoding
             decoder_probs=np.zeros(self.N)
             for i in range(self.N):
-                if self.bpd_z.osdw_decoding[i]==1:
+                if self.bpd_z_osdw_decoding[i]==1:
                     
                     if (self.channel_probs_z[i]+self.channel_probs_y[i])==0:
                         decoder_probs[i]=0
@@ -531,8 +564,8 @@ class css_decode_sim():
 
         #OSDW Logical error rate
         # calculate the residual error
-        residual_x = (self.error_x+self.bpd_x.osdw_decoding) % 2
-        residual_z = (self.error_z+self.bpd_z.osdw_decoding) % 2
+        residual_x = (self.error_x+self.bpd_x_osdw_decoding) % 2
+        residual_z = (self.error_z+self.bpd_z_osdw_decoding) % 2
 
         # check for logical X-error
         if (self.lz@residual_x % 2).any():
@@ -561,8 +594,8 @@ class css_decode_sim():
 
         #OSD0 logical error rate
         # calculate the residual error
-        residual_x = (self.error_x+self.bpd_x.osd0_decoding) % 2
-        residual_z = (self.error_z+self.bpd_z.osd0_decoding) % 2
+        residual_x = (self.error_x+self.bpd_x_osd0_decoding) % 2
+        residual_z = (self.error_z+self.bpd_z_osd0_decoding) % 2
 
         # check for logical X-error
         if (self.lz@residual_x % 2).any():
@@ -591,15 +624,15 @@ class css_decode_sim():
 
         #BP Logical error rate
         #check for convergence
-        if self.bpd_z.converge:
+        if self.bpd_z_converge:
             self.bp_converge_count_z+=1
-        if self.bpd_x.converge:
+        if self.bpd_x_converge:
             self.bp_converge_count_x+=1
 
-        if self.bpd_z.converge and self.bpd_x.converge:
+        if self.bpd_z_converge and self.bpd_x_converge:
             # calculate the residual error
-            residual_x = (self.error_x+self.bpd_x.bp_decoding) % 2
-            residual_z = (self.error_z+self.bpd_z.bp_decoding) % 2
+            residual_x = (self.error_x+self.bpd_x_bp_decoding) % 2
+            residual_z = (self.error_z+self.bpd_z_bp_decoding) % 2
 
             # check for logical X/Z-error
             if not ((self.lz@residual_x % 2).any() or (self.lx@residual_z % 2).any()):
@@ -817,9 +850,9 @@ for name in names:
 
 codes = ['[625,25]', '[1600,64]', '[2025,81]']
 
-error_rates = [np.logspace(-3, -1, 30), 
-               np.logspace(-3, -1, 30), 
-               np.logspace(-3, -1, 30)]
+error_rates = [np.logspace(-2, -1, 20), 
+               np.logspace(-2, -1, 20), 
+               np.logspace(-2, -1, 20)]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -851,7 +884,9 @@ if __name__ == '__main__':
         "error_rate": er, #the physical error rate on the qubits
         "target_runs": MC, #the number of cycles to simulate
         'max_iter': int(Hx.shape[1]/10), #the interation depth for BP
-        'tqdm_disable': True #show live stats
+        'tqdm_disable': True, #show live stats
+        'xyz_error_bias': [1, 0, 0], #show live stats
+        'channel_update': None,
     }
     simulation = css_decode_sim(hx=Hx, hz=Hz, **params).output_dict()
 
@@ -864,6 +899,10 @@ if __name__ == '__main__':
     # Save results
     ler = np.array([ler], dtype=float)
     ler_eb = np.array([ler_eb], dtype=float)
+    bp_ler = np.array([bp_ler], dtype=float)
+    bp_ler_eb = np.array([bp_ler_eb], dtype=float)
+    bp_x_conv_rate = np.array([bp_x_conv_rate], dtype=float)
+    bp_z_conv_rate = np.array([bp_z_conv_rate], dtype=float)
 
     time.sleep(E)
     with h5py.File("bposd_simulations.hdf5", "a") as f: 
