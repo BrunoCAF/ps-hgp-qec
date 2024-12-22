@@ -909,10 +909,28 @@ if __name__ == '__main__':
         grp = f.require_group(names[F])
         subgrp = grp.require_group(code)
         subsubgrp = subgrp.require_group(f'ER={E}')
+        
+        if 'ler' in subsubgrp:
+            del subsubgrp['ler']
         subsubgrp.create_dataset("ler", data=ler)
+        
+        if 'ler_eb' in subsubgrp:
+            del subsubgrp['ler_eb']
         subsubgrp.create_dataset("ler_eb", data=ler_eb)
+        
+        if 'bp_ler' in subsubgrp:
+            del subsubgrp['bp_ler']
         subsubgrp.create_dataset("bp_ler", data=bp_ler)
+        
+        if 'bp_ler_eb' in subsubgrp:
+            del subsubgrp['bp_ler_eb']
         subsubgrp.create_dataset("bp_ler_eb", data=bp_ler_eb)
+        
+        if 'bp_x_conv_rate' in subsubgrp:
+            del subsubgrp['bp_x_conv_rate']
         subsubgrp.create_dataset("bp_x_conv_rate", data=bp_x_conv_rate)
+        
+        if 'bp_z_conv_rate' in subsubgrp:
+            del subsubgrp['bp_z_conv_rate']
         subsubgrp.create_dataset("bp_z_conv_rate", data=bp_z_conv_rate)
     
