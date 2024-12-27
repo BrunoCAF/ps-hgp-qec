@@ -83,3 +83,6 @@ def generate_neighbor_highlight(theta: nx.MultiGraph) -> tuple[nx.MultiGraph, tu
 def generate_neighbor(theta: nx.MultiGraph) -> nx.MultiGraph:
     neighbor, *_ = generate_neighbor_highlight(theta)
     return neighbor
+
+def from_parity_check_matrix(H: sp.csr_array) -> nx.MultiGraph:
+    return bpt.from_biadjacency_matrix(H, create_using=nx.MultiGraph)
