@@ -18,6 +18,7 @@ state_space_params = [(15, 20, 60),
 MC_budget = int(1e4)
 noise_levels = [9/32, 8/32, 9/32, 12/32]
 # times: 15, 40, 80, 200
+p_vals = np.linspace(0.1, 0.5, 15)
 
 def load_tanner_graph(filename: str) -> nx.MultiGraph:
     m, n = np.loadtxt(filename, max_rows=1, dtype=int)

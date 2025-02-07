@@ -47,6 +47,96 @@ def MC_erasure_plog(num_trials: int, state: nx.MultiGraph, p_vals: list[float],
     edgelist = list(nx.Graph(state).edges(data=False))
     return m4ri.MC_erasure_plog(shape, edgelist, num_trials, p_vals, rank_method, only_X)
 
-if __name__ == '__main__':
-    state = bpt.configuration_model(aseq=[3]*4, bseq=[4]*3, seed=0, create_using=nx.MultiGraph)
-    print(MC_erasure_plog(10, state, np.array([0.0, 1.0])))
+def peel(erasure: np.array, H: sp.csr_array) -> bool:
+    while np.count_nonzero(erasure):
+        erased_cols, *_ = np.nonzero(erasure)
+        H_E = H[:, erased_cols]
+
+        check_degrees = np.diff(H_E.indptr)
+        dangling_checks, *_ = np.nonzero(check_degrees == 1)
+        
+        if len(dangling_checks) == 0:
+            return False
+            
+        dangling_check = npr.choice(dangling_checks)
+        dangling_bit = erased_cols[H_E.indices[H_E.indptr[dangling_check]]]
+        erasure[dangling_bit] = 0
+    
+    return True
+
+def MC_peeling_classic(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -> dict:
+    c = [n for n, b in state.nodes(data='bipartite') if b == 0]
+    v = [n for n, b in state.nodes(data='bipartite') if b == 1]
+    H = bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v))
+    N = len(v)
+
+    results = {'mean': [], 'std': []}
+    for erasure_rate in p_vals:
+        failures = 0
+        for _ in range(num_trials):
+            erasure = npr.rand(N) < erasure_rate
+            if not peel(erasure, H):
+                failures += 1
+        
+        mean, std = failures/num_trials, ((failures*(num_trials - failures)) / (num_trials*(num_trials - 1)))**.5
+        results['mean'].append(mean)
+        results['std'].append(std)
+
+    results['mean'] = np.array(results['mean'])
+    results['std'] = np.array(results['std'])
+    
+    return results
+
+
+def HGP(H1: sp.csr_array, H2: sp.csr_array=None):
+    # Convention: H1 is the vertical axis, H2 is the horizontal axis
+    # BB | BC (Z stab)
+    # CB | CC
+    # (X stab)
+    if H2 is None:
+        H2 = H1
+    H1 = H1.astype(np.uint)
+    H2 = H2.astype(np.uint)
+    (m1, n1), (m2, n2) = H1.shape, H2.shape
+    I = lambda n: sp.eye_array(n, dtype=np.uint)
+    Hz = sp.hstack([sp.kron(I(n1), H2), sp.kron(H1.T, I(m2))]).asformat('csr')
+    Hx = sp.hstack([sp.kron(H1, I(n2)), sp.kron(I(m1), H2.T)]).asformat('csr')
+    return Hx, Hz
+
+
+def HGP_peel(erasure: np.array, Hx: sp.csr_array, Hz: sp.csr_array=None, only_X=True) -> tuple[bool, np.array]:
+    if Hz is None:
+        assert only_X
+
+    peel_Z = peel(erasure.copy(), Hx)
+    
+    if only_X:
+        return peel_Z
+    else:
+        peel_X = peel(erasure.copy(), Hz)
+        return peel_Z and peel_X
+    
+
+def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -> dict:
+    c = [n for n, b in state.nodes(data='bipartite') if b == 0]
+    v = [n for n, b in state.nodes(data='bipartite') if b == 1]
+    H = bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v))
+    Hx, Hz = HGP(H)
+    N = len(c)**2 + len(v)**2
+
+    results = {'mean': [], 'std': []}
+    for erasure_rate in p_vals:
+        failures = 0
+        for _ in range(num_trials):
+            erasure = npr.rand(N) < erasure_rate
+            if not HGP_peel(erasure, Hx, Hz, only_X=False):
+                failures += 1
+        
+        mean, std = failures/num_trials, ((failures*(num_trials - failures)) / (num_trials*(num_trials - 1)))**.5
+        results['mean'].append(mean)
+        results['std'].append(std)
+
+    results['mean'] = np.array(results['mean'])
+    results['std'] = np.array(results['std'])
+    
+    return results
