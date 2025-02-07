@@ -38,15 +38,25 @@ if __name__ == '__main__':
     cost_fn = lambda s: MC_peeling_classic(MC_budget, s, [p]) # notice that this version returns both mean and std
     sched_fn = lambda t: arctan_diff_schedule(t, coef=sim_ann_params['beta'])
 
+    # Add verbose to help debugging
+    print(f"{C = }, {p = :.3f}, {max_iter = }")
+    print("Parameters all set, starting the optimization now")
+
     # Run Simulated Annealing
     sim_ann_res = simulated_annealing(cost_function=cost_fn, random_neighbor=generate_neighbor, 
                                       schedule=sched_fn, theta0=theta0, max_iterations=max_iter)
+
+    # Add verbose to help debugging
+    print("Optimization routine finished. Collecting results")
 
     # Unwrap results
     theta_hist, cost_hist, std_hist, best_theta, best_cost, best_std = sim_ann_res
 
     thetas = np.row_stack([parse_edgelist(theta) for theta in theta_hist])
     costs, stds = np.row_stack(cost_hist), np.row_stack(std_hist)
+    
+    # Add verbose to help debugging
+    print("Saving results")
     
     # Store results in HDF5 file
     with h5py.File("SA_peeling.hdf5", "a") as f: # TODO: include the stopping sets
@@ -55,6 +65,9 @@ if __name__ == '__main__':
         grp.create_dataset("cost", data=costs)
         grp.create_dataset("std", data=stds)
 
+    # Add verbose to help debugging
+    print("Results saved. Now we draw the curves for the best codes found during the simulation")
+
     # Analyze the best code found during the simulation
     classic_results = MC_peeling_classic(num_trials=10*MC_budget, 
                                          state=best_theta, p_vals=p_vals)
@@ -62,10 +75,16 @@ if __name__ == '__main__':
     #                              state=best_theta, p_vals=p_vals)
     # TODO: include the stopping sets
 
+    # Add verbose to help debugging
+    print("Saving curve results.")
+
     with h5py.File("best_peeling.hdf5", "a") as f: 
         grp = f.require_group(codes[C])
         grp.create_dataset("mean_peel_classic", data=classic_results['mean'])
         grp.create_dataset("std_peel_classic", data=classic_results['std'])
         # grp.create_dataset("mean_peel_hgp", data=HGP_results['mean'])
         # grp.create_dataset("std_peel_hgp", data=HGP_results['std'])
+
+    # Add verbose to help debugging
+    print("All done. ")
         
