@@ -6,6 +6,8 @@ import scipy.sparse as sp
 
 import pym4ri as m4ri
 
+from tqdm import tqdm
+
 # TODO: implement some strategy for importance sampling
 
 def CSS_HGP_code_from_state(state: nx.MultiGraph) -> tuple[sp.sparray, int, int]:
@@ -71,7 +73,7 @@ def MC_peeling_classic(num_trials: int, state: nx.MultiGraph, p_vals: list[float
     N = len(v)
 
     results = {'mean': [], 'std': []}
-    for erasure_rate in p_vals:
+    for erasure_rate in tqdm(p_vals):
         failures = 0
         for _ in range(num_trials):
             erasure = npr.rand(N) < erasure_rate
@@ -125,7 +127,7 @@ def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -
     N = len(c)**2 + len(v)**2
 
     results = {'mean': [], 'std': []}
-    for erasure_rate in p_vals:
+    for erasure_rate in tqdm(p_vals):
         failures = 0
         for _ in range(num_trials):
             erasure = npr.rand(N) < erasure_rate

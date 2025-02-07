@@ -9,14 +9,15 @@ import h5py
 from css_code_eval import MC_peeling_classic, MC_peeling_HGP
 from experiments_settings import load_tanner_graph, parse_edgelist, generate_neighbor
 from experiments_settings import codes, path_to_initial_codes, textfiles
-from experiments_settings import MC_budget, p_vals
+from experiments_settings import p_vals
 
 from simulated_annealing import arctan_diff_schedule, simulated_annealing
 
-sim_ann_params = {'max_iter': [1300, 900, 800, 700], 
+sim_ann_params = {'max_iter': [800, 500, 400, 300], 
                   'beta': 10}
 
-noise_levels = [0.2, 0.3, 0.35, 0.35]
+MC_budget = int(1e5)
+noise_levels = [0.3, 0.3, 0.35, 0.35]
 
 if __name__ == '__main__':
     # Parse args: -C (Code family to optimize), 
@@ -68,11 +69,11 @@ if __name__ == '__main__':
     # Add verbose to help debugging
     print("Results saved. Now we draw the curves for the best codes found during the simulation")
 
-    # Analyze the best code found during the simulation
-    classic_results = MC_peeling_classic(num_trials=10*MC_budget, 
-                                         state=best_theta, p_vals=p_vals)
-    # HGP_results = MC_peeling_HGP(num_trials=MC_budget, 
-    #                              state=best_theta, p_vals=p_vals)
+    # Analyze the best code found during the simulation (and the initial one)
+    classic_results_0 = MC_peeling_classic(num_trials=10*MC_budget, state=theta0, p_vals=p_vals)
+    classic_results_best = MC_peeling_classic(num_trials=10*MC_budget, state=best_theta, p_vals=p_vals)
+    
+    # HGP_results = MC_peeling_HGP(num_trials=MC_budget, state=best_theta, p_vals=p_vals)
     # TODO: include the stopping sets
 
     # Add verbose to help debugging
@@ -80,8 +81,15 @@ if __name__ == '__main__':
 
     with h5py.File("best_peeling.hdf5", "a") as f: 
         grp = f.require_group(codes[C])
-        grp.create_dataset("mean_peel_classic", data=classic_results['mean'])
-        grp.create_dataset("std_peel_classic", data=classic_results['std'])
+        
+        grp.create_dataset("initial_theta", data=parse_edgelist(theta0))
+        grp.create_dataset("mean_peel_classic", data=classic_results_0['mean'])
+        grp.create_dataset("std_peel_classic", data=classic_results_0['std'])
+
+        grp.create_dataset("best_theta", data=parse_edgelist(best_theta))
+        grp.create_dataset("mean_peel_classic", data=classic_results_best['mean'])
+        grp.create_dataset("std_peel_classic", data=classic_results_best['std'])
+
         # grp.create_dataset("mean_peel_hgp", data=HGP_results['mean'])
         # grp.create_dataset("std_peel_hgp", data=HGP_results['std'])
 

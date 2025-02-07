@@ -54,12 +54,9 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable, sche
 
         if npr.rand() < np.exp(-delta_log_cost/temperature):
             theta = neighbor
-            cost = neigh_cost
-            std = neigh_std
+            cost, std = neigh_cost, neigh_std
 
-            best, best_cost, best_std = min((
-                (th, fth, sth) for th, fth, sth in zip([theta, best], [cost, best_cost], [std, best_std])
-                ), key=lambda p: p[1])
+            best, best_cost, best_std = min([(theta, cost, std), (best_theta, best_cost, best_std)], key=lambda p: p[1])
     
         history.append(theta)
         cost_history.append(cost)
