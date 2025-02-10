@@ -33,7 +33,7 @@ if __name__ == '__main__':
     p = noise_levels[C]
 
     # Choose the evaluation criterion/mode (classic vs HGP)
-    mode = args.m
+    mode = args.mode
     eval_fn = [MC_peeling_classic, MC_peeling_HGP][mode]
 
     # The code family already defines some preferred values for max_iterations, theta0
