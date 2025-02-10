@@ -35,7 +35,7 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable, sche
     
     stats = cost_function(theta)
     cost, std = stats['mean'][0], stats['std'][0]
-    best, best_cost, best_std = theta, cost, std
+    best_theta, best_cost, best_std = theta, cost, std
 
     history, cost_history, std_history = [theta], [cost], [std]
     
@@ -56,13 +56,13 @@ def simulated_annealing(cost_function: Callable, random_neighbor: Callable, sche
             theta = neighbor
             cost, std = neigh_cost, neigh_std
 
-            best, best_cost, best_std = min([(theta, cost, std), (best_theta, best_cost, best_std)], key=lambda p: p[1])
+            best_theta, best_cost, best_std = min([(theta, cost, std), (best_theta, best_cost, best_std)], key=lambda p: p[1])
     
         history.append(theta)
         cost_history.append(cost)
         std_history.append(std)
 
-    return (history, cost_history, std_history, best, best_cost, best_std)
+    return (history, cost_history, std_history, best_theta, best_cost, best_std)
 
 
 sim_ann_params = {'max_iter': [2400, 900, 450, 180], 
