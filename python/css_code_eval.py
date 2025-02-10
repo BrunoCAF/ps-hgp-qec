@@ -73,7 +73,12 @@ def MC_peeling_classic(num_trials: int, state: nx.MultiGraph, p_vals: list[float
     N = len(v)
 
     results = {'mean': [], 'std': []}
-    for erasure_rate in tqdm(p_vals):
+    if len(p_vals) > 1:
+        iterator = tqdm(p_vals)
+    else:
+        iterator = p_vals
+
+    for erasure_rate in iterator:
         failures = 0
         for _ in range(num_trials):
             erasure = npr.rand(N) < erasure_rate
@@ -127,7 +132,12 @@ def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -
     N = len(c)**2 + len(v)**2
 
     results = {'mean': [], 'std': []}
-    for erasure_rate in tqdm(p_vals):
+    if len(p_vals) > 1:
+        iterator = tqdm(p_vals)
+    else:
+        iterator = p_vals
+
+    for erasure_rate in iterator:
         failures = 0
         for _ in range(num_trials):
             erasure = npr.rand(N) < erasure_rate
