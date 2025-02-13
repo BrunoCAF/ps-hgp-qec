@@ -89,7 +89,7 @@ if __name__ == '__main__':
     print("Saving curve results.")
 
     with h5py.File("best_peeling.hdf5", "a") as f: 
-        grp = f.require_group(codes[C])
+        grp = f.require_group(codes[C]).require_group(f'mode={mode}')
         
         initial_grp = grp.require_group("initial")
         initial_grp.create_dataset("theta", data=parse_edgelist(theta0))
