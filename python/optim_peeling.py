@@ -69,7 +69,7 @@ if __name__ == '__main__':
     
     # Store results in HDF5 file
     with h5py.File("SA_peeling.hdf5", "a") as f: # TODO: include the stopping sets
-        grp = f.require_group(codes[C])
+        grp = f.require_group(codes[C]).require_group(f'mode={mode}')
         grp.create_dataset("theta", data=thetas)
         grp.create_dataset("cost", data=costs)
         grp.create_dataset("std", data=stds)
