@@ -6,6 +6,7 @@ from scipy.special import comb
 import networkx as nx
 import networkx.algorithms.bipartite as bpt
 import pym4ri
+import numba
 
 path_to_initial_codes = '../initial_codes/'
 codes = ['[625,25]', '[1225,65]', '[1600,64]', '[2025,81]']
@@ -123,8 +124,6 @@ def break_SS(theta: nx.MultiGraph) -> nx.MultiGraph:
     # Convert back to pcm
     Hprime = bpt.biadjacency_matrix(G, row_order=np.arange(m), column_order=np.arange(m, m+n))
     return Hprime, [e1, e2], [f1, f2]
-
-import numba
 
 @numba.jit(nopython=True)
 def gosper_next(c):

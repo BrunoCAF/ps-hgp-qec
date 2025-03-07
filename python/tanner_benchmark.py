@@ -78,9 +78,6 @@ if __name__ == '__main__':
     nt, kt, dt = code.shape[0], code_dimension(code.T), code_distance(code.T)
     print(f'Classical (base) code params: [n={n}, k={k}, d={d}], [n^t={nt}, k^t={kt}, d^t={dt}]')
     
-    # Define CSS code via HGP construction
-    Hx, Hz = HGP(code)
-    Hx, Hz = Hx.todense(), Hz.todense() #???????????????????
     print(f'Quantum HGP code params: [[N={n*n+nt*nt}, K={k*k+kt*kt}, D={min(d, dt)}]]')
     params = {
         'n': n, 'nt': nt, 'k': k, 
@@ -90,22 +87,23 @@ if __name__ == '__main__':
 
     # Set simulation parameters
     er = p_vals[E]
-    print(f'Error rate: 10^{np.log10(er):.2f} | MC budget: 10^{np.log10(MC):.0f} trials')
+    print(f'Error rate: {er:.3f} | MC budget: 10^{np.log10(MC):.0f} trials')
 
     # Set decoder/cost function -> do both ML and peeling
-    # Collect results
     theta = bpt.from_biadjacency_matrix(code, create_using=nx.MultiGraph)
+    print('Running ML decoding benchmark...')    
     ML_results = MC_erasure_plog(MC, state=theta, p_vals=[er])
+    print('Running peeling decoding benchmark...')    
     peeling_results = MC_peeling_HGP(MC, state=theta, p_vals=[er])
 
     # Save results
-    
+    print('Simulation done, saving results...')    
     time.sleep(E)
     with h5py.File("tanner_codes_benchmark.hdf5", "a") as f: 
         grp = f.require_group(f'[{n},{k},{d}]')
         
         for par, val in params.items():
-            grp.attrs[k] = val
+            grp.attrs[str(k)] = val
 
         subgrp = grp.require_group(f'ER={E}')
         
@@ -114,3 +112,4 @@ if __name__ == '__main__':
         subgrp.create_dataset("peel_mean", data=peeling_results['mean'])
         subgrp.create_dataset("peel_std", data=peeling_results['std'])
     
+    print('Results saved. All done.')

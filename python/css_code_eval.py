@@ -5,7 +5,7 @@ import networkx.algorithms.bipartite as bpt
 import scipy.sparse as sp
 
 import pym4ri as m4ri
-
+import numba
 from tqdm import tqdm
 
 # TODO: implement some strategy for importance sampling
@@ -49,22 +49,46 @@ def MC_erasure_plog(num_trials: int, state: nx.MultiGraph, p_vals: list[float],
     edgelist = list(nx.Graph(state).edges(data=False))
     return m4ri.MC_erasure_plog(shape, edgelist, num_trials, p_vals, rank_method, only_X)
 
-def peel(erasure: np.array, H: sp.csr_array) -> bool:
-    while np.count_nonzero(erasure):
-        erased_cols, *_ = np.nonzero(erasure)
+# def peel(erasure: np.array, H: sp.csr_array) -> bool:
+#     while np.count_nonzero(erasure):
+#         erased_cols, *_ = np.nonzero(erasure)
+#         H_E = H[:, erased_cols]
+
+#         check_degrees = np.diff(H_E.indptr)
+#         dangling_checks, *_ = np.nonzero(check_degrees == 1)
+        
+#         if len(dangling_checks) == 0:
+#             return False
+            
+#         dangling_check = npr.choice(dangling_checks)
+#         dangling_bit = erased_cols[H_E.indices[H_E.indptr[dangling_check]]]
+#         erasure[dangling_bit] = 0
+    
+#     return True
+
+@numba.njit
+def _peel(erasure: np.ndarray, H: np.ndarray) -> bool:
+    while np.any(erasure):
+        erased_cols = np.nonzero(erasure)[0]
         H_E = H[:, erased_cols]
 
-        check_degrees = np.diff(H_E.indptr)
-        dangling_checks, *_ = np.nonzero(check_degrees == 1)
-        
+        check_degrees = np.sum(H_E, axis=1)
+        dangling_checks = np.nonzero(check_degrees == 1)[0]
+
         if len(dangling_checks) == 0:
             return False
-            
+
+        # Select a random dangling check manually
         dangling_check = npr.choice(dangling_checks)
-        dangling_bit = erased_cols[H_E.indices[H_E.indptr[dangling_check]]]
+        dangling_bit = erased_cols[np.argmax(H_E[dangling_check])]
+
         erasure[dangling_bit] = 0
-    
+
     return True
+
+def peel(erasure: np.array, H: sp.csr_array) -> bool:
+    return _peel(erasure, H.todense())
+
 
 def MC_peeling_classic(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -> dict:
     c = [n for n, b in state.nodes(data='bipartite') if b == 0]
@@ -110,46 +134,41 @@ def HGP(H1: sp.csr_array, H2: sp.csr_array=None):
     Hx = sp.hstack([sp.kron(H1, I(n2)), sp.kron(I(m1), H2.T)]).asformat('csr')
     return Hx, Hz
 
-
-def HGP_peel(erasure: np.array, Hx: sp.csr_array, Hz: sp.csr_array=None, only_X=True) -> tuple[bool, np.array]:
+@numba.njit
+def _HGP_peel(erasure: np.array, Hx: np.ndarray, Hz: np.ndarray=None, only_X=True) -> tuple[bool, np.array]:
     if Hz is None:
         assert only_X
 
-    peel_Z = peel(erasure.copy(), Hx)
+    peel_Z = _peel(erasure.copy(), Hx)
     
     if only_X:
         return peel_Z
     else:
-        peel_X = peel(erasure.copy(), Hz)
+        peel_X = _peel(erasure.copy(), Hz)
         return peel_Z and peel_X
     
 
-def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float], H: sp.csr_array=None) -> dict:
-    if H is None:
-        c = [n for n, b in state.nodes(data='bipartite') if b == 0]
-        v = [n for n, b in state.nodes(data='bipartite') if b == 1]
-        H = sp.csr_array(bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v)).todense() & 1)
-    Hx, Hz = HGP(H)
-    N = len(c)**2 + len(v)**2
+@numba.njit
+def _MC_peeling_HGP(num_trials: int, Hx: np.ndarray, Hz: np.ndarray, p_vals: list[float]) -> dict[str, np.ndarray]:
+    N = Hx.shape[1]
 
-    results = {'mean': [], 'std': []}
-    if len(p_vals) > 1:
-        iterator = tqdm(p_vals)
-    else:
-        iterator = p_vals
-
-    for erasure_rate in iterator:
+    results = {'mean': np.zeros((len(p_vals),)), 'std': np.zeros((len(p_vals),))}
+    for t, erasure_rate in enumerate(p_vals):
         failures = 0
         for _ in range(num_trials):
             erasure = npr.rand(N) < erasure_rate
-            if not HGP_peel(erasure, Hx, Hz, only_X=False):
+            if not _HGP_peel(erasure, Hx, Hz, only_X=False):
                 failures += 1
         
         mean, std = failures/num_trials, ((failures*(num_trials - failures)) / (num_trials*(num_trials - 1)))**.5
-        results['mean'].append(mean)
-        results['std'].append(std)
+        results['mean'][t] = mean
+        results['std'][t] = std
 
-    results['mean'] = np.array(results['mean'])
-    results['std'] = np.array(results['std'])
-    
     return results
+
+def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -> dict:
+    c = [n for n, b in state.nodes(data='bipartite') if b == 0]
+    v = [n for n, b in state.nodes(data='bipartite') if b == 1]
+    H = sp.csr_array(bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v)).todense() & 1)
+    Hx, Hz = HGP(H)
+    return _MC_peeling_HGP(num_trials, Hx.todense(), Hz.todense(), p_vals)
