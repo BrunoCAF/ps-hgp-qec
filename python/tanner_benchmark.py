@@ -3,14 +3,11 @@ import numpy.random as npr
 import scipy.sparse as sp
 import networkx as nx
 import networkx.algorithms.bipartite as bpt
-import pym4ri
 
 import h5py
 import argparse
 from tqdm import tqdm
 import time
-import datetime
-import pickle
 
 from css_code_eval import HGP, MC_erasure_plog, MC_peeling_HGP
 from experiments_settings import code_dimension, code_distance
@@ -107,7 +104,7 @@ if __name__ == '__main__':
     with h5py.File("tanner_codes_benchmark.hdf5", "a") as f: 
         grp = f.require_group(f'[{n},{k},{d}]')
         
-        for par, val in params:
+        for par, val in params.items():
             grp.attrs[k] = val
 
         subgrp = grp.require_group(f'ER={E}')
