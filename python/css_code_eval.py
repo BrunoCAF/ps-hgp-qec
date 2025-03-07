@@ -124,10 +124,11 @@ def HGP_peel(erasure: np.array, Hx: sp.csr_array, Hz: sp.csr_array=None, only_X=
         return peel_Z and peel_X
     
 
-def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -> dict:
-    c = [n for n, b in state.nodes(data='bipartite') if b == 0]
-    v = [n for n, b in state.nodes(data='bipartite') if b == 1]
-    H = sp.csr_array(bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v)).todense() & 1)
+def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float], H: sp.csr_array=None) -> dict:
+    if H is None:
+        c = [n for n, b in state.nodes(data='bipartite') if b == 0]
+        v = [n for n, b in state.nodes(data='bipartite') if b == 1]
+        H = sp.csr_array(bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v)).todense() & 1)
     Hx, Hz = HGP(H)
     N = len(c)**2 + len(v)**2
 
