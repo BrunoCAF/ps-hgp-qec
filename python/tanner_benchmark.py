@@ -67,7 +67,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-C', action="store", dest='C', default=0, type=int, required=True)
     parser.add_argument('-E', action="store", dest='E', default=0, type=int, required=True)
-    parser.add_argument('-D', action="store", dest='D', default=0, type=int, required=True)
+    parser.add_argument('-D', action="store", dest='D', default=0, type=int)
     parser.add_argument('-M', action="store", dest='MC', default=MC_budget, type=int)
     args = parser.parse_args()
 
