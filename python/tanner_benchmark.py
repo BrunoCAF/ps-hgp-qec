@@ -65,13 +65,12 @@ if __name__ == '__main__':
     parser.add_argument('-C', action="store", dest='C', default=0, type=int, required=True)
     parser.add_argument('-E', action="store", dest='E', default=0, type=int, required=True)
     parser.add_argument('-D', action="store", dest='D', default=0, type=int)
-    # parser.add_argument('-M1', action="store", dest='MC_ML', default=MC_budget, type=int)
-    # parser.add_argument('-M2', action="store", dest='MC_peel', default=MC_budget, type=int)
+    parser.add_argument('-M', action="store", dest='MC', default=MC_budget, type=int)
     args = parser.parse_args()
 
     # Choose the code, error rate, decoder and MC budget
     C, E, D = args.C, args.E, args.D
-    # MC_ML, MC_peel = args.MC_ML, args.MC_peel
+    MC_budget = args.MC
     MC_ML = int(1e6) if E < 3 else MC_budget
     MC_peel = MC_budget if E < 3 else int(1e3)
     print(f'Script configuration: {C = }, {E = }, {D = }, {MC_ML = }, {MC_peel = }')
