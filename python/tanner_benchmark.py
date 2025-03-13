@@ -65,12 +65,16 @@ if __name__ == '__main__':
     parser.add_argument('-C', action="store", dest='C', default=0, type=int, required=True)
     parser.add_argument('-E', action="store", dest='E', default=0, type=int, required=True)
     parser.add_argument('-D', action="store", dest='D', default=0, type=int)
-    parser.add_argument('-M', action="store", dest='MC', default=MC_budget, type=int)
+    # parser.add_argument('-M1', action="store", dest='MC_ML', default=MC_budget, type=int)
+    # parser.add_argument('-M2', action="store", dest='MC_peel', default=MC_budget, type=int)
     args = parser.parse_args()
 
     # Choose the code, error rate, decoder and MC budget
-    C, E, D, MC = args.C, args.E, args.D, args.MC
-    print(f'Script configuration: {C = }, {E = }, {D = }, {MC = }')
+    C, E, D = args.C, args.E, args.D
+    # MC_ML, MC_peel = args.MC_ML, args.MC_peel
+    MC_ML = int(1e6) if E < 3 else MC_budget
+    MC_peel = MC_budget if E < 3 else int(1e3)
+    print(f'Script configuration: {C = }, {E = }, {D = }, {MC_ML = }, {MC_peel = }')
 
     # Set code
     code = tanner_code_K8_Hamming(order_assignment_list[C])
@@ -87,14 +91,14 @@ if __name__ == '__main__':
 
     # Set simulation parameters
     er = p_vals[E]
-    print(f'Error rate: {er:.3f} | MC budget: 10^{np.log10(MC):.0f} trials')
+    print(f'Error rate: {er:.3f} | MC budget (ML): 10^{np.log10(MC_ML):.0f} trials; (peel): 10^{np.log10(MC_peel):.0f} trials')
 
     # Set decoder/cost function -> do both ML and peeling
     theta = bpt.from_biadjacency_matrix(code, create_using=nx.MultiGraph)
     print('Running ML decoding benchmark...')    
-    ML_results = MC_erasure_plog(MC, state=theta, p_vals=[er])
+    ML_results = MC_erasure_plog(MC_ML, state=theta, p_vals=[er])
     print('Running peeling decoding benchmark...')    
-    peeling_results = MC_peeling_HGP(MC, state=theta, p_vals=[er])
+    peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
 
     # Save results
     print('Simulation done, saving results...')    
@@ -103,13 +107,13 @@ if __name__ == '__main__':
         grp = f.require_group(f'[{n},{k},{d}]')
         
         for par, val in params.items():
-            grp.attrs[str(k)] = val
+            grp.attrs[str(par)] = val
 
         subgrp = grp.require_group(f'ER={E}')
         
-        subgrp.create_dataset("ML_mean", data=ML_results['mean'])
-        subgrp.create_dataset("ML_std", data=ML_results['std'])
-        subgrp.create_dataset("peel_mean", data=peeling_results['mean'])
-        subgrp.create_dataset("peel_std", data=peeling_results['std'])
+        subgrp.create_dataset("ML_ler", data=ML_results['mean'])
+        subgrp.create_dataset("ML_eb", data=1.96*ML_results['std']/np.sqrt(MC_ML))
+        subgrp.create_dataset("peel_ler", data=peeling_results['mean'])
+        subgrp.create_dataset("peel_eb", data=1.96*peeling_results['std']/np.sqrt(MC_peel))
     
     print('Results saved. All done.')
