@@ -189,3 +189,35 @@ def from_parity_check_matrix(H: sp.csr_array) -> nx.MultiGraph:
 def code_dimension(H: sp.csr_array) -> int:
     _, n = H.shape
     return n - pym4ri.rank(H.astype(bool).todense())
+
+def sample_LDPC(Lbda: np.poly1d, P: np.poly1d) -> sp.csr_array:
+    # Recall graph parameters
+    n, m, E = Lbda(1), P(1), P.deriv()(1)
+    assert Lbda.deriv()(1) == P.deriv()(1), "Number of edges is inconsistent: Lambda'(1) =/= P'(1)"
+    
+    # Fill in indptr for csr_array format
+    indptr = np.zeros(m+1, dtype=np.int32)
+    offset = 1
+    for i, P_i in enumerate(P.c[::-1]):
+        indptr[offset:offset+P_i] = i
+        offset += P_i
+    indptr = np.cumsum(indptr)
+
+    # Fill in indices for csr_array format
+    indices = np.zeros(E, dtype=np.int32)
+    ind_offset, elem_offset = 0, 0
+    for i, Lbda_i in enumerate(Lbda.c[::-1]):
+        indices[ind_offset:ind_offset+i*Lbda_i] = elem_offset+np.arange(i*Lbda_i)//i
+        elem_offset += Lbda_i
+        ind_offset += i*Lbda_i
+    
+    # Apply random edge permutation
+    indices = indices[npr.permutation(E)]
+    
+    # Create sparse biadjacency matrix
+    H = sp.csr_array((np.ones(E, dtype=np.int32), indices, indptr), shape=(m, n))
+    # Count multiple edges mod 2
+    return sp.csr_array(H.todense()&1)
+
+def polys_from_H(H: sp.csr_array) -> tuple[np.poly1d, np.poly1d]:
+    return np.poly1d(np.bincount(np.sum(H, axis=0).astype(int))[::-1]), np.poly1d(np.bincount(np.sum(H, axis=1).astype(int))[::-1])
