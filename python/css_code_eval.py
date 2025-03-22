@@ -66,6 +66,85 @@ def MC_erasure_plog(num_trials: int, state: nx.MultiGraph, p_vals: list[float],
     
 #     return True
 
+# Idea to improve peeling implementation (same algo, just more efficient implementation):
+# construct the erased graph structure via adjacency lists:
+# iterate over all checks (rows of sparse pcm) to count their degree towards the erasure, 
+# and add them to the adjacency list of each (erased) bit in their neighborhood
+# and add every degree-1 check to a stack for fast retrieval;
+# keep track of the number of remaining erasures;
+# while num_erasures > 0:
+# look for a dangling check in the stack (if None -> failure immediately), 
+# if any, pick it, find its dangling bit (only remaining erased bit in its adj list),
+# unerase that bit (decrease num erasures), and while at it, decrease the degree of 
+# all the checks in the adj list of this bit, also while at it, add any new dangling 
+# check to the stack. 
+# 
+
+@numba.njit
+def _fast_peel(erasure: np.ndarray, Hindptr: np.ndarray, Hindices: np.ndarray) -> bool:
+    # Build adjacency list structure for erased bits, and keep track of their count
+    erased_bits = np.nonzero(erasure)[0]
+    num_erased_bits = 0
+    reversed_erased_bits = np.zeros((len(erasure),), dtype=np.int32)
+    for i, e in enumerate(erased_bits):
+        reversed_erased_bits[e] = i
+    bit_adj_lists = np.zeros((len(erasure), len(Hindptr)), dtype=np.int32)
+    erased_bit_degrees = np.zeros((len(erasure),), dtype=np.int32)
+
+    # Keep track of the degree of the checks towards the erasure and stack the dangling checks
+    check_erasure_degrees = np.zeros((len(Hindptr)-1,), dtype=np.int32)
+    dangling_check_stack, stack_size = np.zeros((len(Hindptr)-1,), dtype=np.int32), 0
+    
+    # Populate in the adjacency lists of the erased bits and add the first dangling checks
+    for check_idx in range(len(Hindptr)):
+        for bit_idx in Hindices[Hindptr[check_idx]:Hindptr[check_idx+1]]:
+            if erasure[bit_idx]:
+                num_erased_bits += 1
+                check_erasure_degrees[check_idx] += 1
+                rev_bit_idx = reversed_erased_bits[bit_idx]
+                bit_adj_lists[rev_bit_idx][erased_bit_degrees[rev_bit_idx]] = check_idx
+                erased_bit_degrees[rev_bit_idx] += 1
+
+        if check_erasure_degrees[check_idx] == 1:
+            dangling_check_stack[stack_size] = check_idx
+            stack_size += 1
+
+    # Main peeling loop
+    while num_erased_bits > 0:
+        # Find a dangling check
+        dangling_check_idx = -1
+        # Pop checks whose dangling bit has already been unerased
+        while stack_size > 0 and dangling_check_idx == -1:
+            dangling_check_idx = dangling_check_stack[stack_size-1]
+            stack_size -= 1
+            if check_erasure_degrees[dangling_check_idx] == 0:
+                dangling_check_idx = -1
+
+        # If no dangling checks remain, failure
+        if dangling_check_idx == -1:
+            return False
+
+        # Find the corresponding dangling bit
+        for bit_idx in Hindices[Hindptr[check_idx]:Hindptr[check_idx+1]]:
+            if erasure[bit_idx]:
+                dangling_bit_idx = bit_idx
+                break
+        # Unerase it and decrease the erasure count
+        erasure[dangling_bit_idx] = False
+        num_erased_bits -= 1
+        # Decrease the degrees of each neighboring check
+        rev_bit_idx = reversed_erased_bits[dangling_bit_idx]
+        for neighbour_count in range(erased_bit_degrees[rev_bit_idx]):
+            check_idx = bit_adj_lists[rev_bit_idx][neighbour_count]
+            check_erasure_degrees[check_idx] -= 1
+            # If a check becomes dangling, add it to the stack
+            if check_erasure_degrees[check_idx] == 1:
+                dangling_check_stack[stack_size] = check_idx
+                stack_size += 1
+
+    # If there are no erasures left, success
+    return True
+
 @numba.njit
 def _peel(erasure: np.ndarray, H: np.ndarray) -> bool:
     while np.any(erasure):
@@ -87,7 +166,8 @@ def _peel(erasure: np.ndarray, H: np.ndarray) -> bool:
     return True
 
 def peel(erasure: np.array, H: sp.csr_array) -> bool:
-    return _peel(erasure, H.todense())
+    # return _peel(erasure, H.todense())
+    return _fast_peel(erasure, H.indptr, H.indices)
 
 
 def MC_peeling_classic(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -> dict:
@@ -135,29 +215,29 @@ def HGP(H1: sp.csr_array, H2: sp.csr_array=None):
     return Hx, Hz
 
 @numba.njit
-def _HGP_peel(erasure: np.array, Hx: np.ndarray, Hz: np.ndarray=None, only_X=True) -> tuple[bool, np.array]:
-    if Hz is None:
+def _HGP_peel(erasure: np.array, Hxindptr: np.ndarray, Hxindices: np.ndarray, 
+              Hzindptr: np.ndarray=None, Hzindices: np.ndarray=None, only_X=True) -> tuple[bool, np.array]:
+    if Hzindptr is None or Hzindices is None:
         assert only_X
 
-    peel_Z = _peel(erasure.copy(), Hx)
+    peel_Z = _fast_peel(erasure.copy(), Hxindptr, Hxindices)
     
     if only_X:
         return peel_Z
     else:
-        peel_X = _peel(erasure.copy(), Hz)
+        peel_X = _fast_peel(erasure.copy(), Hzindptr, Hzindices)
         return peel_Z and peel_X
     
 
 @numba.njit
-def _MC_peeling_HGP(num_trials: int, Hx: np.ndarray, Hz: np.ndarray, p_vals: list[float]) -> dict[str, np.ndarray]:
-    N = Hx.shape[1]
-
+def _MC_peeling_HGP(num_trials: int, Hxindptr: np.ndarray, Hxindices: np.ndarray, 
+                    Hzindptr: np.ndarray, Hzindices: np.ndarray, N:int, p_vals: list[float]) -> dict[str, np.ndarray]:
     results = {'mean': np.zeros((len(p_vals),)), 'std': np.zeros((len(p_vals),))}
     for t, erasure_rate in enumerate(p_vals):
         failures = 0
         for _ in range(num_trials):
             erasure = npr.rand(N) < erasure_rate
-            if not _HGP_peel(erasure, Hx, Hz, only_X=False):
+            if not _HGP_peel(erasure, Hxindptr, Hxindices, Hzindptr, Hzindices, only_X=False):
                 failures += 1
         
         mean, std = failures/num_trials, ((failures*(num_trials - failures)) / (num_trials*(num_trials - 1)))**.5
@@ -171,4 +251,6 @@ def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -
     v = [n for n, b in state.nodes(data='bipartite') if b == 1]
     H = sp.csr_array(bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v)).todense() & 1)
     Hx, Hz = HGP(H)
-    return _MC_peeling_HGP(num_trials, Hx.todense(), Hz.todense(), p_vals)
+    N = Hx.shape[1]
+    assert Hz.shape[1] == N
+    return _MC_peeling_HGP(num_trials, Hx.indptr, Hx.indices, Hz.indptr, Hz.indices, N, p_vals)
