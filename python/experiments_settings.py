@@ -131,6 +131,11 @@ def gosper_next(c):
     b = c + a
     return (((c ^ b) >> 2) // a) | b
 
+def long_gosper_next(c: int) -> int:
+    a = c & -c
+    b = c + a
+    return (((c ^ b) >> 2) // a) | b
+
 @numba.jit(nopython=True)
 def _smallest_SS_weight(H: np.ndarray) -> tuple[int, int, list]:
     _, n = H.shape
