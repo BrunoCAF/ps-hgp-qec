@@ -11,6 +11,7 @@ import time
 
 from css_code_eval import HGP, MC_erasure_plog, MC_peeling_HGP
 from experiments_settings import code_dimension, code_distance
+from tanner_codes import TannerCode, TannerCodeHGP
 
 ord_ass_28_4_13 = [
     np.roll(np.concatenate([np.array([0]), (1+np.roll(np.arange(7), shift=1))]), shift=k) for k in range(8)
@@ -56,7 +57,18 @@ def tanner_code_K8_Hamming(order_assignment: list[list[int]]) -> sp.csr_array:
 
 
 p_vals = np.linspace(0.1, 0.5, 15)
-MC_budget = int(1e5)
+MC_budget = {
+    "peel": {
+        0: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
+        1: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
+        2: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
+    }, 
+    "ML": {
+        0: [int(1e3)]*6 + [int(5e6), int(5e6), int(5e5), int(5e5), int(1e5), int(1e4), int(1e4), int(1e3), int(1e3)], 
+        1: [int(5e6), int(5e6), int(1e6)]+[int(1e5)]*3+[int(1e4)]*3+[int(1e3)]*6, 
+        2: [int(1e5)]*2+[int(1e4)]*3+[int(1e3)]*10,
+    }
+}
 
 decoders = []
 
@@ -65,14 +77,16 @@ if __name__ == '__main__':
     parser.add_argument('-C', action="store", dest='C', default=0, type=int, required=True)
     parser.add_argument('-E', action="store", dest='E', default=0, type=int, required=True)
     parser.add_argument('-D', action="store", dest='D', default=0, type=int)
-    parser.add_argument('-M', action="store", dest='MC', default=MC_budget, type=int)
+    parser.add_argument('-M', action="store", dest='MC', default=None, type=int)
     args = parser.parse_args()
 
     # Choose the code, error rate, decoder and MC budget
     C, E, D = args.C, args.E, args.D
-    MC_budget = args.MC
-    MC_ML = int(1e6) if E < 3 else MC_budget
-    MC_peel = MC_budget if E < 3 else int(1e3)
+    if args.MC is None:
+        MC_ML = MC_budget['ML'][C][E]
+        MC_peel = MC_budget['peel'][C][E]
+    else:
+        MC_ML = MC_peel = args.MC
     print(f'Script configuration: {C = }, {E = }, {D = }, {MC_ML = }, {MC_peel = }')
 
     # Set code
@@ -95,9 +109,19 @@ if __name__ == '__main__':
     # Set decoder/cost function -> do both ML and peeling
     theta = bpt.from_biadjacency_matrix(code, create_using=nx.MultiGraph)
     print('Running ML decoding benchmark...')    
+    t0 = time.time()
     ML_results = MC_erasure_plog(MC_ML, state=theta, p_vals=[er])
-    print('Running peeling decoding benchmark...')    
-    peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
+    dt = time.time() - t0
+    print(f'ML done in {dt:.3f} s')
+
+    tanner_code_classic = TannerCode.from_standard_code(code, [3*k + np.arange(3) for k in range(8)])
+    tanner_code_hgp = TannerCodeHGP(tanner_code_classic)
+    print('Running peeling decoding benchmark...')
+    t0 = time.time()
+    # peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
+    normal_peeling_stats, generalized_peeling_stats = tanner_code_hgp.peel_al_benchmark([er], max_num_trials=MC_peel)
+    dt = time.time() - t0
+    print(f'Peeling done in {dt:.3f} s')
 
     # Save results
     print('Simulation done, saving results...')    
@@ -112,7 +136,14 @@ if __name__ == '__main__':
         
         subgrp.create_dataset("ML_ler", data=ML_results['mean'])
         subgrp.create_dataset("ML_eb", data=1.96*ML_results['std']/np.sqrt(MC_ML))
-        subgrp.create_dataset("peel_ler", data=peeling_results['mean'])
-        subgrp.create_dataset("peel_eb", data=1.96*peeling_results['std']/np.sqrt(MC_peel))
+
+        # subgrp.create_dataset("peelAL_ler", data=peelingAL_results['mean'])
+        # subgrp.create_dataset("peelAL_eb", data=1.96*peelingAL_results['std']/np.sqrt(MC_peel))
+
+        subgrp.create_dataset("normal_peel_ler", data=normal_peeling_stats['ler'])
+        subgrp.create_dataset("normal_peel_eb", data=normal_peeling_stats['ler_eb'])
+
+        subgrp.create_dataset("gen_peel_ler", data=generalized_peeling_stats['ler'])
+        subgrp.create_dataset("gen_peel_eb", data=generalized_peeling_stats['ler_eb'])
     
     print('Results saved. All done.')
