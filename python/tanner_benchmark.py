@@ -83,18 +83,19 @@ if __name__ == '__main__':
     # Choose the code, error rate, decoder and MC budget
     C, E, D = args.C, args.E, args.D
     if args.MC is None:
-        MC_ML = MC_budget['ML'][C][E]
-        MC_peel = MC_budget['peel'][C][E]
+        MC_ML = MC_budget['ML'][C%3][E]
+        MC_peel = MC_budget['peel'][C%3][E]
     else:
         MC_ML = MC_peel = args.MC
     print(f'Script configuration: {C = }, {E = }, {D = }, {MC_ML = }, {MC_peel = }')
 
     # Set code
-    code = tanner_code_K8_Hamming(order_assignment_list[C])
+    code = tanner_code_K8_Hamming(order_assignment_list[C%3])
+    if C // 3 == 1:
+        code = sp.csr_array((code.T @ code).todense() & 1)
     n, k, d = code.shape[1], code_dimension(code), code_distance(code)
     nt, kt, dt = code.shape[0], code_dimension(code.T), code_distance(code.T)
-    print(f'Classical (base) code params: [n={n}, k={k}, d={d}], [n^t={nt}, k^t={kt}, d^t={dt}]')
-    
+    print(f'Classical (base) code params: [n={n}, k={k}, d={d}], [n^t={nt}, k^t={kt}, d^t={dt}]')    
     print(f'Quantum HGP code params: [[N={n*n+nt*nt}, K={k*k+kt*kt}, D={min(d, dt)}]]')
     params = {
         'n': n, 'nt': nt, 'k': k, 
@@ -114,12 +115,16 @@ if __name__ == '__main__':
     dt = time.time() - t0
     print(f'ML done in {dt:.3f} s')
 
-    tanner_code_classic = TannerCode.from_standard_code(code, [3*k + np.arange(3) for k in range(8)])
+    if C // 3 == 0:
+        tanner_code_classic = TannerCode.from_standard_code(code, [3*k + np.arange(3) for k in range(8)])
+    else:
+        tanner_code_classic = TannerCode.from_standard_code(code, [4*k + np.arange(4) for k in range(7)])
+
     tanner_code_hgp = TannerCodeHGP(tanner_code_classic)
     print('Running peeling decoding benchmark...')
     t0 = time.time()
     # peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
-    normal_peeling_stats, generalized_peeling_stats = tanner_code_hgp.gen_peel_benchmark([er], max_num_trials=MC_peel)
+    normal_peeling_stats, generalized_peeling_stats, pruning_stats = tanner_code_hgp.gen_peel_benchmark([er], max_num_trials=MC_peel)
     dt = time.time() - t0
     print(f'Peeling done in {dt:.3f} s')
 
@@ -137,13 +142,13 @@ if __name__ == '__main__':
         subgrp.create_dataset("ML_ler", data=ML_results['mean'])
         subgrp.create_dataset("ML_eb", data=1.96*ML_results['std']/np.sqrt(MC_ML))
 
-        # subgrp.create_dataset("peelAL_ler", data=peelingAL_results['mean'])
-        # subgrp.create_dataset("peelAL_eb", data=1.96*peelingAL_results['std']/np.sqrt(MC_peel))
-
         subgrp.create_dataset("normal_peel_ler", data=normal_peeling_stats['ler'])
         subgrp.create_dataset("normal_peel_eb", data=normal_peeling_stats['ler_eb'])
 
         subgrp.create_dataset("gen_peel_ler", data=generalized_peeling_stats['ler'])
         subgrp.create_dataset("gen_peel_eb", data=generalized_peeling_stats['ler_eb'])
+
+        subgrp.create_dataset("prun_ler", data=pruning_stats['ler'])
+        subgrp.create_dataset("prun_eb", data=pruning_stats['ler_eb'])
     
     print('Results saved. All done.')

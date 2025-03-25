@@ -6,7 +6,7 @@ import networkx.algorithms.bipartite as bpt
 import pym4ri
 
 from experiments_settings import code_distance, code_dimension
-from css_code_eval import MC_erasure_plog, MC_peeling_HGP, _HGP_peel, HGP
+from css_code_eval import MC_erasure_plog, MC_peeling_HGP, _HGP_peel, HGP, stabilizer_search
 
 from typing import Callable, Self
 from tqdm import tqdm
@@ -95,14 +95,6 @@ class TannerCode:
         outer_code = sp.csr_array((outer_data, outer_indices, outer_indptr))
 
         return cls(outer_code, local_subcodes)
-    
-    def peel_1(self, erasure: np.ndarray) -> bool:
-        """
-        Tanner peeling - first mode: a check is dangling if the size of the 
-        erased neighborhood is smaller than the distance of the local code.
-        """
-        # TODO: implement this and the other 2 versions
-        pass
 
 
 class TannerCodeHGP:
@@ -273,7 +265,7 @@ class TannerCodeHGP:
                 return False
         return True
 
-    def peel_al(self, erasure: np.ndarray, only_X:bool=False) -> tuple[bool, bool]:
+    def peel_al(self, erasure: np.ndarray, only_X: bool=False) -> tuple[bool, bool]:
         """
         Anthony's proposed version of generalized peeling:
         Start by doing regular peeling until exhaustion. Next, apply the idea of
@@ -375,7 +367,7 @@ class TannerCodeHGP:
         normal_peeling_success = normal_peeling_X_success and normal_peeling_Z_success
         return normal_peeling_success, True
     
-    def peel_v3(self, erasure: np.ndarray, only_X:bool=False) -> tuple[bool, bool]:
+    def peel_v3(self, erasure: np.ndarray, only_X: bool=False) -> tuple[bool, bool]:
         """
         Anthony's (and mine) proposed version of generalized peeling:
         Start by doing regular peeling until exhaustion. Next, apply the idea of
@@ -385,7 +377,8 @@ class TannerCodeHGP:
         # Run the same thing for X-type error (Z-type stabilizers) and then for Z-type error, if not only_X. 
         # X-type error:
         erasure_X = erasure.copy()
-
+        
+        # Try to solve until both normal and generalized peeling as well as pruning fail (or succeed)
         normal_peeling_X_success, gen_peeling_X_success = self._peel_v3(erasure_X, self.std_Hz, self.outer_Hz, 
                                                                         self.local_subcodes_full_Hz)
         if not gen_peeling_X_success:
@@ -405,7 +398,6 @@ class TannerCodeHGP:
             # Finished correcting Z-type erasure (at this point the generalized version must have succeeded)
             normal_peeling_success = normal_peeling_X_success and normal_peeling_Z_success
             return normal_peeling_success, True
-
 
     def _peel_v3(self, erasure: np.ndarray, std_H: sp.csr_array, outer_H: sp.csr_array, local_subcodes_full:Callable) -> tuple[bool, bool]:     
         # Try to solve until both normal and generalized peeling are defeated (or succeed)
@@ -451,8 +443,63 @@ class TannerCodeHGP:
         # At this point, the generalized version must have succeeded.
         return normal_peeling_success, True
 
+    def peel_v4(self, erasure: np.ndarray, pruning_depth: int=1, only_X: bool=False) -> tuple[bool, bool, bool]:
+        """
+        Peeling v4 is meant to be peeling v3 + pruning. 
+        The pruning depth controls how many generators you consider to multiply to find a stabilizer that fits in the erasure. 
+        """
+        # Run the same thing for X-type error (Z-type stabilizers) and then for Z-type error, if not only_X. 
+        # X-type error:
+        erasure_X = erasure.copy()
+
+        # Try to solve until both normal and generalized peeling as well as pruning fail (or succeed)
+        normal_peeling_X_success, gen_peeling_X_success, pruning_X_success = \
+            self._peel_v4(erasure_X, self.std_Hz, self.outer_Hz, self.local_subcodes_full_Hz, self.std_Hx, pruning_depth)
+            
+        if not pruning_X_success:
+            return False, False, False
+        # At this point, pruning over X must have succeeded
+        if only_X:
+            return normal_peeling_X_success, gen_peeling_X_success, True
+        else:
+            # Z-type error: 
+            erasure_Z = erasure.copy()
+
+            # Try to solve until both normal and generalized peeling as well as pruning fail (or succeed)
+            normal_peeling_Z_success, gen_peeling_Z_success, pruning_Z_success = \
+                self._peel_v4(erasure_Z, self.std_Hx, self.outer_Hx, self.local_subcodes_full_Hx, self.std_Hz, pruning_depth)
+            
+            if not pruning_Z_success:
+                return False, False, False
+            # At this point, pruning over Z must have succeeded
+            normal_peeling_success = normal_peeling_X_success and normal_peeling_Z_success
+            gen_peeling_success = gen_peeling_X_success and gen_peeling_Z_success
+            return normal_peeling_success, gen_peeling_success, True        
+
+    def _peel_v4(self, erasure: np.ndarray, std_H: sp.csr_array, outer_H: sp.csr_array, 
+                 local_subcodes_full:Callable, std_H_conj: sp.csr_array, pruning_depth: int=1) -> tuple[bool, bool, bool]:  
+        
+        normal_peeling_success, gen_peeling_success = self._peel_v3(erasure, std_H, outer_H, local_subcodes_full)
+
+        # After normal and generalized peeling fail (or succeed), start pruning
+        while np.any(erasure):
+            # If generalized peeling didn't work, look for a nontrivial stabilizer inside the erasure
+            found, stabilizer = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth)
+            if found:
+                # If found, arbiter the correction over a qubit inside its support (and unerase it)
+                gauge_qubit = np.nonzero(stabilizer)[0][0]
+                erasure[gauge_qubit] = 0
+                # Go back to peeling
+                self._peel_v3(erasure, std_H, outer_H, local_subcodes_full)
+            else:
+                # If no stabilizer was found, pruning has failed. 
+                return normal_peeling_success, gen_peeling_success, False
+        
+        return normal_peeling_success, gen_peeling_success, True
+     
+
     def gen_peel_benchmark(self, p_vals:np.ndarray[float], max_num_trials:int, min_num_fails:int=None, 
-                          only_X:bool=False) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+                          only_X:bool=False) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], dict[str, np.ndarray]]:
         (m1, n1, _), (m2, n2, _) = self.shapes
         N = n1*n2 + m1*m2
         
@@ -466,6 +513,9 @@ class TannerCodeHGP:
         generalized_peeling_stats = {"ler": np.zeros_like(p_vals), "ler_eb": np.zeros_like(p_vals)}
         generalized_peeling_failures = np.zeros_like(p_vals)
 
+        pruning_stats = {"ler": np.zeros_like(p_vals), "ler_eb": np.zeros_like(p_vals)}
+        pruning_failures = np.zeros_like(p_vals)
+
         if min_num_fails is None:
                 min_num_fails = max_num_trials
         
@@ -474,25 +524,32 @@ class TannerCodeHGP:
             num_trials = max_num_trials
             print(f'{er = }')
             for t in (pbar := tqdm(range(max_num_trials))):
-                pbar.set_description(f'Normal: #fails = {normal_peeling_failures[i]:.0f} | Generalized: #fails = {generalized_peeling_failures[i]:.0f}')
+                descr = f'#failures: Peel. {normal_peeling_failures[i]:.0f}'
+                descr += f'| Gen. Peel. = {generalized_peeling_failures[i]:.0f}'
+                descr += f'| GPeel.+Prun. = {pruning_failures[i]:.0f}'
+                pbar.set_description(descr)
 
                 erasure = npr.rand(N) < er
-                normal_peeling_success, generalized_peeling_success = self.peel_v3(erasure, only_X=only_X)
+                normal_peeling_success, generalized_peeling_success, pruning_success = self.peel_v4(erasure, only_X=only_X)
 
                 normal_peeling_failures[i] += 1 if not normal_peeling_success else 0
                 generalized_peeling_failures[i] += 1 if not generalized_peeling_success else 0
+                pruning_failures[i] += 1 if not pruning_success else 0
                 
-                if generalized_peeling_failures[i] >= min_num_fails:
+                if pruning_failures[i] >= min_num_fails:
                     num_trials = t+1
                     break
-
-            generalized_peeling_stats["ler"][i] = mean(generalized_peeling_failures[i], num_trials)
-            generalized_peeling_stats["ler_eb"][i] = eb(generalized_peeling_failures[i], num_trials)
 
             normal_peeling_stats["ler"][i] = mean(normal_peeling_failures[i], num_trials)
             normal_peeling_stats["ler_eb"][i] = eb(normal_peeling_failures[i], num_trials)
 
-        return normal_peeling_stats, generalized_peeling_stats
+            generalized_peeling_stats["ler"][i] = mean(generalized_peeling_failures[i], num_trials)
+            generalized_peeling_stats["ler_eb"][i] = eb(generalized_peeling_failures[i], num_trials)
+
+            pruning_stats["ler"][i] = mean(pruning_failures[i], num_trials)
+            pruning_stats["ler_eb"][i] = eb(pruning_failures[i], num_trials)
+
+        return normal_peeling_stats, generalized_peeling_stats, pruning_stats
 
 
 
@@ -526,17 +583,62 @@ if __name__ == '__main__':
     #                          order_assignments=[np.roll(np.concatenate([[0], np.roll(np.arange(1,7), shift=4*k)]), shift=3) for k in range(8)])
 
     # 
-    tanner_code = TannerCode(outer_code=spkdwhl_H, 
-                             local_subcode=cyclic_hamming, 
-                             order_assignments=[np.roll(np.concatenate([[0], np.roll(np.arange(1,7), shift=3 if k>0 else 0)]), shift=k) for k in range(8)])
+    # tanner_code = TannerCode(outer_code=spkdwhl_H, 
+    #                          local_subcode=cyclic_hamming, 
+    #                          order_assignments=[np.roll(np.concatenate([[0], np.roll(np.arange(1,7), shift=3 if k>0 else 0)]), shift=k) for k in range(8)])
 
 
-    print(tanner_code.std_H.todense()[:6, :])
+    # print(tanner_code.std_H.todense()[:6, :])
     # print(f'[n={tanner_code.std_H.shape[1]}, k={code_dimension(tanner_code.std_H)}, d={code_distance(tanner_code.std_H)}]')
     # print(f'[nt={tanner_code.std_H.T.shape[1]}, kt={code_dimension(tanner_code.std_H.T)}, dt={code_distance(tanner_code.std_H.T)}]')
+    
+    ord_ass_28_4_13 = [
+        np.roll(np.concatenate([np.array([0]), (1+np.roll(np.arange(7), shift=1))]), shift=k) for k in range(8)
+    ]
 
-    new_tanner_code = TannerCode.from_standard_code(tanner_code.std_H, [3*k + np.arange(3) for k in range(8)])
+    ord_ass_28_6_10 = [
+        [0, 1, 2, 4, 3, 6, 7, 5], 
+        [4, 0, 5, 6, 7, 3, 2, 1], 
+        [4, 1, 0, 5, 6, 7, 3, 2], 
+        [4, 2, 1, 0, 5, 6, 7, 3], 
+        [4, 3, 2, 1, 0, 5, 6, 7], 
+        [4, 7, 3, 2, 1, 0, 5, 6], 
+        [4, 6, 7, 3, 2, 1, 0, 5], 
+        [4, 5, 6, 7, 3, 2, 1, 0], 
+    ]
+
+    ord_ass_28_10_6 = [
+        [u^v for v in range(8)] for u in range(8)
+    ]
+
+    order_assignment_list = [ord_ass_28_4_13, ord_ass_28_6_10, ord_ass_28_10_6]
+
+
+    def tanner_code_K8_Hamming(order_assignment: list[list[int]]) -> sp.csr_array:
+        K8 = nx.complete_graph(8)
+            
+        indptr, indices, data = [0], [], []
+        for u in K8.nodes:
+            count = 0
+            for i, e in enumerate(K8.edges):
+                if u in e:
+                    count += 1
+                    indices.append(i)
+                    v = [w for w in e if w != u][0]
+                    x = np.unpackbits(np.uint8(order_assignment[u][v]), count=3, bitorder='little').astype(np.int32).reshape(3, 1)
+                    data.append(x)
+
+            indptr.append(count)
+        indptr = np.cumsum(indptr)
+        indices = np.array(indices)
+        data = np.stack(data, axis=0)
+
+        return sp.csr_array(sp.bsr_array((data, indices, indptr)).todense())
+
+    code = tanner_code_K8_Hamming(order_assignment_list[0])
+    new_tanner_code = TannerCode.from_standard_code(code, [3*k + np.arange(3) for k in range(8)])
     # print(f'[n={new_tanner_code.std_H.shape[1]}, k={code_dimension(new_tanner_code.std_H)}, d={code_distance(new_tanner_code.std_H)}]')
+    # print(f'[n={new_tanner_code.std_H.T.shape[1]}, k={code_dimension(new_tanner_code.std_H.T)}, d={code_distance(new_tanner_code.std_H.T)}]')
 
     new_tanner_hgp = TannerCodeHGP(new_tanner_code)
     print(f'{new_tanner_hgp.std_Hx.shape = }')
@@ -550,15 +652,11 @@ if __name__ == '__main__':
     v = [n for n, b in theta.nodes(data='bipartite') if b == 1]
     H = sp.csr_array(bpt.biadjacency_matrix(theta, row_order=sorted(c), column_order=sorted(v)).todense() & 1)
     Hx, Hz = HGP(H)
-    
-    print(f'{Hx = }, {new_tanner_hgp.std_Hx = }')
     assert np.all(Hx.todense() == new_tanner_hgp.std_Hx.todense())
-    print(f'{Hz = }, {new_tanner_hgp.std_Hz = }')
     assert np.all(Hz.todense() == new_tanner_hgp.std_Hz.todense())
     
     erasure_rate = np.array([0.20, 0.25])
-    
-    normal_peeling_stats, generalized_peeling_stats = new_tanner_hgp.gen_peel_benchmark(erasure_rate, max_num_trials=int(1e3))
+    normal_peeling_stats, generalized_peeling_stats, pruning_stats = new_tanner_hgp.gen_peel_benchmark(erasure_rate, max_num_trials=int(1e3))
     
     theta = bpt.from_biadjacency_matrix(new_tanner_code.std_H, create_using=nx.MultiGraph)
     ML_results = MC_erasure_plog(int(1e4), state=theta, p_vals=erasure_rate)
@@ -566,9 +664,10 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots(1, 1)
     ax.set_yscale('log')
+    ax.errorbar(erasure_rate, ML_results["mean"], 1.96*ML_results["std"]/1e2, label="ML")
     ax.errorbar(erasure_rate, normal_peeling_stats["ler"], normal_peeling_stats["ler_eb"], label="normal")
-    ax.errorbar(erasure_rate, generalized_peeling_stats["ler"], generalized_peeling_stats["ler_eb"], label="generalized", linestyle='--')
-    plt.errorbar(erasure_rate, ML_results["mean"], 1.96*ML_results["std"]/1e2, label="ML")
+    ax.errorbar(erasure_rate, generalized_peeling_stats["ler"], generalized_peeling_stats["ler_eb"], label="generalized")
+    ax.errorbar(erasure_rate, pruning_stats["ler"], pruning_stats["ler_eb"], label="pruning")
     # ax.errorbar(erasure_rate, peeling_results["mean"], 1.96*peeling_results["std"]/np.sqrt(1e3), label="peeling that works")
     plt.legend()
     plt.show()
