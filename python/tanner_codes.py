@@ -7,7 +7,6 @@ import pym4ri
 
 from experiments_settings import code_distance, code_dimension
 from css_code_eval import MC_erasure_plog, MC_peeling_HGP, _HGP_peel, HGP
-from tanner_benchmark import tanner_code_K8_Hamming
 
 from typing import Self
 from tqdm import tqdm
