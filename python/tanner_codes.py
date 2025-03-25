@@ -149,7 +149,7 @@ class TannerCodeHGP:
                               self.classic_C2_tanner_splitting[1:-1], # section points over the 2nd axis
                               axis=1) # list of t2 elements of shape (n1, ?, N) (t2 = # of Tanner checks in C2)
                               ] # same list of t2 elements of shape (n1, N) (2nd axis collapsed by reduce operation)
-                              ).swapaxes(0,1).reshape(n1*len(tanner_code.local_subcodes), -1) # shape (n1*t2, N)
+                              ).swapaxes(0,1).reshape(n1*t2, -1) # shape (n1*t2, N)
         self.outer_Hz = sp.csr_array(self.outer_Hz & 1)
         
         self. outer_Hx = np.vstack([
