@@ -8,7 +8,7 @@ import pym4ri
 from experiments_settings import code_distance, code_dimension
 from css_code_eval import MC_erasure_plog, MC_peeling_HGP, _HGP_peel, HGP
 
-from typing import Self
+from typing import Callable, Self
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
@@ -177,7 +177,7 @@ class TannerCodeHGP:
         self.local_subcodes_BB_Hz = lambda i: self.local_subcodes_C2[i % n1]
         self.local_distances_BB_Hz = np.tile(self.local_distances_C2, n1)
 
-        self.shapes = ((m1, n1), (m2, n2), (t1, t2))
+        self.shapes = ((m1, n1, t1), (m2, n2, t2))
         
         # This should be enough to implement Anthony's variant. 
         # std_H, outer_H, local_subcodes, local_distances in the classical case
@@ -188,14 +188,14 @@ class TannerCodeHGP:
         # For now, let's worry about recovering these full local codes. 
 
         # For Hz:
-        # i: index of the row in outer_Hz (tanner check idx)
+        # i: index of the row in outer_Hz (tanner check idx) (n1*t2 rows)
         # r = i // n1, c = i % n1 (row and column of the tanner check in the outer Hz grid)
         # slice in std_Hz: 
         # start: r*m2 + self.classic_C2_tanner_splitting[c]
         # end (not included): start + C2.local_subcodes[c].shape[0]
 
         # For Hx: a bit more complicated... need a strided slice
-        # i: index of the row in outer_Hx
+        # i: index of the row in outer_Hx (tanner check idx) (t1*n2 rows)
         # r = i // n2, c = i % n2 (row and colunm of the tanner check in the outer Hx grid)
         # strided slice in std_Hx:
         # start: self.classic_C1_tanner_splitting[r]*n2 + c
@@ -227,7 +227,7 @@ class TannerCodeHGP:
         :param i: Index of the quantum Tanner check (row in std.outer_Hx)
         :return: The corresponding local subcode (all rows of the Tanner check, columns within the support)
         """
-        (_, _), (_, n2), (_ ,_) = self.shapes
+        (_, _, _), (_, n2, _) = self.shapes
         r, c = i // n2, i % n2
         start = self.classic_C1_tanner_splitting[r]*n2 + c
         end = start + self.local_subcodes_C1[r].shape[0]*n2
@@ -241,8 +241,8 @@ class TannerCodeHGP:
         :param i: Index of the quantum Tanner check (row in std.outer_Hz)
         :return: The corresponding local subcode (all rows of the Tanner check, columns within the support)
         """
-        (_, n1), (m2, _), (_ ,_) = self.shapes
-        r, c = i // n1, i % n1
+        (_, _, _), (m2, _, t2) = self.shapes
+        r, c = i // t2, i % t2
         start = r*m2 + self.classic_C2_tanner_splitting[c]
         end = start + self.local_subcodes_C2[c].shape[0]
         stride = 1
@@ -281,7 +281,7 @@ class TannerCodeHGP:
         do another round of regular peeling, alternate until both are exhausted. 
         """
         # Run the same thing for X-type error (Z-type stabilizers) and then for Z-type error, if not only_X. 
-        (m1, n1), (m2, n2), _ = self.shapes
+        (m1, n1, _), (m2, n2, _) = self.shapes
         N_BB = n1*n2
 
         # X-type error:
@@ -375,10 +375,85 @@ class TannerCodeHGP:
         normal_peeling_success = normal_peeling_X_success and normal_peeling_Z_success
         return normal_peeling_success, True
     
+    def peel_v3(self, erasure: np.ndarray, only_X:bool=False) -> tuple[bool, bool]:
+        """
+        Anthony's (and mine) proposed version of generalized peeling:
+        Start by doing regular peeling until exhaustion. Next, apply the idea of
+        peel_3: a Tanner check is dangling if you can determine any nonzero number of
+        erased bits by ML decoding. In practice, you will always attempt to do so (costly). 
+        """
+        # Run the same thing for X-type error (Z-type stabilizers) and then for Z-type error, if not only_X. 
+        # X-type error:
+        erasure_X = erasure.copy()
 
-    def peel_al_benchmark(self, p_vals:np.ndarray[float], max_num_trials:int, min_num_fails:int=None, 
+        normal_peeling_X_success, gen_peeling_X_success = self._peel_v3(erasure_X, self.std_Hz, self.outer_Hz, 
+                                                                        self.local_subcodes_full_Hz)
+        if not gen_peeling_X_success:
+            return False, False
+        # Finished correcting X-type erasure (at this point the generalized version must have succeeded)
+        if only_X:
+            return normal_peeling_X_success, True
+        else:
+            # Z-type error:
+            erasure_Z = erasure.copy()
+            
+            # Try to solve until both normal and generalized peeling are defeated (or succeed)
+            normal_peeling_Z_success, gen_peeling_Z_success = self._peel_v3(erasure_Z, self.std_Hx, self.outer_Hx, 
+                                                                            self.local_subcodes_full_Hx)
+            if not gen_peeling_Z_success:
+                return False, False
+            # Finished correcting Z-type erasure (at this point the generalized version must have succeeded)
+            normal_peeling_success = normal_peeling_X_success and normal_peeling_Z_success
+            return normal_peeling_success, True
+
+
+    def _peel_v3(self, erasure: np.ndarray, std_H: sp.csr_array, outer_H: sp.csr_array, local_subcodes_full:Callable) -> tuple[bool, bool]:     
+        # Try to solve until both normal and generalized peeling are defeated (or succeed)
+        normal_peeling_success = self.peel_0(erasure, std_H)
+        
+        # Now start the generalized peeling
+        while np.any(erasure):
+            # Search for a "dangling" Tanner check by testing each one of them. 
+            # Select erased columns
+            outer_H_E = outer_H[:, erasure] # this is the tricky part for numba
+            # Filter out the Tanner checks that have no erasures
+            has_erasure = np.nonzero(0 < np.diff(outer_H_E.indptr))[0]
+            
+            # Now we have to iterate over all Tanner checks that have any erasure 
+            # until we find one that can at least partially solve its erasures
+            unblocked = False
+            for tanner_check in has_erasure:
+                # Fetch local code and its support
+                local_H, supp = local_subcodes_full(tanner_check)
+                # Further select erased columns
+                local_H_E = local_H[:, erasure[supp]]
+                # Convert the pcm to a gen matrix: find a basis of its kernel
+                ML_solution = pym4ri.chk2gen(local_H_E.astype(bool).todense())
+                # The determined bits are the rows of this gen matrix for which all entries are zero
+                determined_bits = np.bitwise_not(np.bitwise_or.reduce(ML_solution, axis=1))
+                # Find the corresponding global index of the determined bits
+                erased_within_support = np.nonzero(erasure[supp])[0]
+                determined_bits_global = supp[erased_within_support][determined_bits]
+                # Unerase the determined bits:
+                erasure[determined_bits_global] = False
+
+                # If any bits were unerased, then we have unblocked, and we go back to normal peeling
+                if np.any(determined_bits):
+                    unblocked = True
+                    break
+                
+            # If no bits were unerased by any of the Tanner checks, we've failed. 
+            if unblocked:
+                self.peel_0(erasure, std_H)
+            else:
+                return False, False
+        
+        # At this point, the generalized version must have succeeded.
+        return normal_peeling_success, True
+
+    def gen_peel_benchmark(self, p_vals:np.ndarray[float], max_num_trials:int, min_num_fails:int=None, 
                           only_X:bool=False) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
-        (m1, n1), (m2, n2), _ = self.shapes
+        (m1, n1, _), (m2, n2, _) = self.shapes
         N = n1*n2 + m1*m2
         
         mean = lambda n_fail, n_total: n_fail/n_total
@@ -402,7 +477,7 @@ class TannerCodeHGP:
                 pbar.set_description(f'Normal: #fails = {normal_peeling_failures[i]:.0f} | Generalized: #fails = {generalized_peeling_failures[i]:.0f}')
 
                 erasure = npr.rand(N) < er
-                normal_peeling_success, generalized_peeling_success = self.peel_al(erasure, only_X=only_X)
+                normal_peeling_success, generalized_peeling_success = self.peel_v3(erasure, only_X=only_X)
 
                 normal_peeling_failures[i] += 1 if not normal_peeling_success else 0
                 generalized_peeling_failures[i] += 1 if not generalized_peeling_success else 0
@@ -483,18 +558,18 @@ if __name__ == '__main__':
     
     erasure_rate = np.array([0.20, 0.25])
     
-    normal_peeling_stats, generalized_peeling_stats = new_tanner_hgp.peel_al_benchmark(erasure_rate, max_num_trials=int(1e4))
+    normal_peeling_stats, generalized_peeling_stats = new_tanner_hgp.gen_peel_benchmark(erasure_rate, max_num_trials=int(1e3))
     
     theta = bpt.from_biadjacency_matrix(new_tanner_code.std_H, create_using=nx.MultiGraph)
-    # ML_results = MC_erasure_plog(int(1e4), state=theta, p_vals=erasure_rate)
-    peeling_results = MC_peeling_HGP(int(1e4), state=theta, p_vals=erasure_rate)
+    ML_results = MC_erasure_plog(int(1e4), state=theta, p_vals=erasure_rate)
+    # peeling_results = MC_peeling_HGP(int(1e3), state=theta, p_vals=erasure_rate)
 
     fig, ax = plt.subplots(1, 1)
     ax.set_yscale('log')
     ax.errorbar(erasure_rate, normal_peeling_stats["ler"], normal_peeling_stats["ler_eb"], label="normal")
     ax.errorbar(erasure_rate, generalized_peeling_stats["ler"], generalized_peeling_stats["ler_eb"], label="generalized", linestyle='--')
-    # plt.errorbar(erasure_rate, ML_results["mean"], 1.96*ML_results["std"]/1e2, label="ML")
-    ax.errorbar(erasure_rate, peeling_results["mean"], 1.96*peeling_results["std"]/1e2, label="peeling that works")
+    plt.errorbar(erasure_rate, ML_results["mean"], 1.96*ML_results["std"]/1e2, label="ML")
+    # ax.errorbar(erasure_rate, peeling_results["mean"], 1.96*peeling_results["std"]/np.sqrt(1e3), label="peeling that works")
     plt.legend()
     plt.show()
     

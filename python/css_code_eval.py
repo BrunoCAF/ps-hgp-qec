@@ -52,7 +52,7 @@ def MC_erasure_plog(num_trials: int, state: nx.MultiGraph, p_vals: list[float],
 def _peel(erasure: np.array, H: sp.csr_array) -> bool:
     while np.any(erasure):
         erased_cols = np.nonzero(erasure)[0]
-        H_E = H[:, erased_cols]
+        H_E = H[:, erasure]
         dangling_checks = np.nonzero(np.diff(H_E.indptr) == 1)[0]
         
         if len(dangling_checks) > 0:    

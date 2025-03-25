@@ -119,7 +119,7 @@ if __name__ == '__main__':
     print('Running peeling decoding benchmark...')
     t0 = time.time()
     # peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
-    normal_peeling_stats, generalized_peeling_stats = tanner_code_hgp.peel_al_benchmark([er], max_num_trials=MC_peel)
+    normal_peeling_stats, generalized_peeling_stats = tanner_code_hgp.gen_peel_benchmark([er], max_num_trials=MC_peel)
     dt = time.time() - t0
     print(f'Peeling done in {dt:.3f} s')
 
