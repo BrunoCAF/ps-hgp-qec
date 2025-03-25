@@ -8,6 +8,8 @@ import pym4ri as m4ri
 import numba
 from tqdm import tqdm
 
+from experiments_settings import gosper_next, long_gosper_next
+
 # TODO: implement some strategy for importance sampling
 
 def CSS_HGP_code_from_state(state: nx.MultiGraph) -> tuple[sp.sparray, int, int]:
@@ -248,3 +250,25 @@ def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -
     H = sp.csr_array(bpt.biadjacency_matrix(state, row_order=sorted(c), column_order=sorted(v)).todense() & 1)
     Hx, Hz = HGP(H)
     return _MC_peeling_HGP(num_trials, Hx, Hz, p_vals)
+
+# @numba.jit
+def stabilizer_search(H: np.ndarray, erasure: np.ndarray, depth: int=1) -> tuple[bool, np.ndarray]:
+    m, _ = H.shape
+
+    for weight in range(1, depth+1):
+        c = (1 << weight) - 1  # Smallest subset of size 'weight'
+        while c < (1 << m):
+            # Convert 'c' to a binary representation as a NumPy array
+            row_combination = np.array([(c >> i) & 1 for i in range(m)], dtype=bool) # , dtype=np.float32
+            stabilizer = np.bitwise_xor.reduce(H, axis=0, where=row_combination[:, None], dtype=bool)
+            
+            # Check if corresponding stabilizer lies within the erasure
+            if np.any(stabilizer) and not np.any(stabilizer >> erasure):
+                return True, stabilizer
+
+            c = long_gosper_next(c)  # Get next subset using Gosper's hack
+            if long_gosper_next(c) <= c:
+                print(np.binary_repr(c))
+                input()
+        
+    return False, np.zeros_like(erasure)
