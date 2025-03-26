@@ -64,8 +64,8 @@ MC_budget = {
         2: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
     }, 
     "ML": {
-        0: [int(1e3)]*6 + [int(1e6), int(1e6), int(5e5), int(5e5), int(1e5), int(1e4), int(1e4), int(1e3), int(1e3)], 
-        1: [int(5e6), int(5e6), int(1e6)]+[int(1e5)]*3+[int(1e4)]*3+[int(1e3)]*6, 
+        0: [int(1e3)]*6 + [int(1e6), int(5e5), int(5e5), int(5e5), int(1e5), int(1e4), int(1e4), int(1e3), int(1e3)], 
+        1: [int(1e6), int(1e6), int(1e6)]+[int(1e5)]*3+[int(1e4)]*3+[int(1e3)]*6, 
         2: [int(1e5)]*2+[int(1e4)]*3+[int(1e3)]*10,
     }
 }
@@ -124,7 +124,8 @@ if __name__ == '__main__':
     print('Running peeling decoding benchmark...')
     t0 = time.time()
     # peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
-    normal_peeling_stats, generalized_peeling_stats, pruning_stats = tanner_code_hgp.gen_peel_benchmark([er], max_num_trials=MC_peel)
+    normal_peeling_stats, generalized_peeling_stats, pruning_stats = tanner_code_hgp.gen_peel_benchmark([er], pruning_depth=2,
+                                                                                                        max_num_trials=MC_peel)
     dt = time.time() - t0
     print(f'Peeling done in {dt:.3f} s')
 
@@ -148,7 +149,8 @@ if __name__ == '__main__':
         subgrp.create_dataset("gen_peel_ler", data=generalized_peeling_stats['ler'])
         subgrp.create_dataset("gen_peel_eb", data=generalized_peeling_stats['ler_eb'])
 
-        subgrp.create_dataset("prun_ler", data=pruning_stats['ler'])
-        subgrp.create_dataset("prun_eb", data=pruning_stats['ler_eb'])
+        for d, pruning_stats_d in pruning_stats.items():
+            subgrp.create_dataset(f"prun_d{d}_ler", data=pruning_stats_d['ler'])
+            subgrp.create_dataset(f"prun_d{d}_eb", data=pruning_stats_d['ler_eb'])
     
     print('Results saved. All done.')
