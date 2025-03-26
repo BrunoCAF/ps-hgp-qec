@@ -443,7 +443,7 @@ class TannerCodeHGP:
         # At this point, the generalized version must have succeeded.
         return normal_peeling_success, True
 
-    def peel_v4(self, erasure: np.ndarray, pruning_depth: int=1, only_X: bool=False) -> tuple[bool, bool, bool]:
+    def peel_v4(self, erasure: np.ndarray, pruning_depth: int=2, only_X: bool=False) -> tuple[bool, bool, list[bool]]:
         """
         Peeling v4 is meant to be peeling v3 + pruning. 
         The pruning depth controls how many generators you consider to multiply to find a stabilizer that fits in the erasure. 
@@ -456,11 +456,11 @@ class TannerCodeHGP:
         normal_peeling_X_success, gen_peeling_X_success, pruning_X_success = \
             self._peel_v4(erasure_X, self.std_Hz, self.outer_Hz, self.local_subcodes_full_Hz, self.std_Hx, pruning_depth)
             
-        if not pruning_X_success:
-            return False, False, False
+        if not pruning_X_success[-1]:
+            return False, False, [False]*pruning_depth
         # At this point, pruning over X must have succeeded
         if only_X:
-            return normal_peeling_X_success, gen_peeling_X_success, True
+            return normal_peeling_X_success, gen_peeling_X_success, pruning_X_success
         else:
             # Z-type error: 
             erasure_Z = erasure.copy()
@@ -469,23 +469,25 @@ class TannerCodeHGP:
             normal_peeling_Z_success, gen_peeling_Z_success, pruning_Z_success = \
                 self._peel_v4(erasure_Z, self.std_Hx, self.outer_Hx, self.local_subcodes_full_Hx, self.std_Hz, pruning_depth)
             
-            if not pruning_Z_success:
-                return False, False, False
+            if not pruning_Z_success[-1]:
+                return False, False, [False]*pruning_depth
             # At this point, pruning over Z must have succeeded
             normal_peeling_success = normal_peeling_X_success and normal_peeling_Z_success
             gen_peeling_success = gen_peeling_X_success and gen_peeling_Z_success
-            return normal_peeling_success, gen_peeling_success, True        
+            pruning_success = [pXs and pZs for pXs, pZs in zip(pruning_X_success, pruning_Z_success)]
+            return normal_peeling_success, gen_peeling_success, pruning_success        
 
     def _peel_v4(self, erasure: np.ndarray, std_H: sp.csr_array, outer_H: sp.csr_array, 
-                 local_subcodes_full:Callable, std_H_conj: sp.csr_array, pruning_depth: int=1) -> tuple[bool, bool, bool]:  
+                 local_subcodes_full:Callable, std_H_conj: sp.csr_array, pruning_depth: int) -> tuple[bool, bool, list[bool]]:  
         
         normal_peeling_success, gen_peeling_success = self._peel_v3(erasure, std_H, outer_H, local_subcodes_full)
 
         # After normal and generalized peeling fail (or succeed), start pruning
+        found_at_depth = [True]*pruning_depth
         while np.any(erasure):
             # If generalized peeling didn't work, look for a nontrivial stabilizer inside the erasure
-            found, stabilizer = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth)
-            if found:
+            found_at_depth, stabilizer = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth)
+            if found_at_depth[-1]:
                 # If found, arbiter the correction over a qubit inside its support (and unerase it)
                 gauge_qubit = np.nonzero(stabilizer)[0][0]
                 erasure[gauge_qubit] = 0
@@ -493,13 +495,13 @@ class TannerCodeHGP:
                 self._peel_v3(erasure, std_H, outer_H, local_subcodes_full)
             else:
                 # If no stabilizer was found, pruning has failed. 
-                return normal_peeling_success, gen_peeling_success, False
+                break
         
-        return normal_peeling_success, gen_peeling_success, True
+        return normal_peeling_success, gen_peeling_success, found_at_depth
      
 
-    def gen_peel_benchmark(self, p_vals:np.ndarray[float], max_num_trials:int, min_num_fails:int=None, 
-                          only_X:bool=False) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], dict[str, np.ndarray]]:
+    def gen_peel_benchmark(self, p_vals:np.ndarray[float], max_num_trials:int, min_num_fails:int=None, pruning_depth: int=2,
+                          only_X:bool=False) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray], dict[int, dict[str, np.ndarray]]]:
         (m1, n1, _), (m2, n2, _) = self.shapes
         N = n1*n2 + m1*m2
         
@@ -513,8 +515,8 @@ class TannerCodeHGP:
         generalized_peeling_stats = {"ler": np.zeros_like(p_vals), "ler_eb": np.zeros_like(p_vals)}
         generalized_peeling_failures = np.zeros_like(p_vals)
 
-        pruning_stats = {"ler": np.zeros_like(p_vals), "ler_eb": np.zeros_like(p_vals)}
-        pruning_failures = np.zeros_like(p_vals)
+        pruning_stats = {d+1: {"ler": np.zeros_like(p_vals), "ler_eb": np.zeros_like(p_vals)} for d in range(pruning_depth)}
+        pruning_failures = {d+1: np.zeros_like(p_vals) for d in range(pruning_depth)}
 
         if min_num_fails is None:
                 min_num_fails = max_num_trials
@@ -526,17 +528,19 @@ class TannerCodeHGP:
             for t in (pbar := tqdm(range(max_num_trials))):
                 descr = f'#failures: Peel. {normal_peeling_failures[i]:.0f}'
                 descr += f'| Gen. Peel. = {generalized_peeling_failures[i]:.0f}'
-                descr += f'| GPeel.+Prun. = {pruning_failures[i]:.0f}'
+                for d, pruning_failures_d in pruning_failures.items():                    
+                    descr += f'| GPeel.+Prun. D={d} = {pruning_failures_d[i]:.0f}'
                 pbar.set_description(descr)
 
                 erasure = npr.rand(N) < er
-                normal_peeling_success, generalized_peeling_success, pruning_success = self.peel_v4(erasure, only_X=only_X)
+                normal_peeling_success, generalized_peeling_success, pruning_success = self.peel_v4(erasure, pruning_depth=pruning_depth, only_X=only_X)
 
                 normal_peeling_failures[i] += 1 if not normal_peeling_success else 0
                 generalized_peeling_failures[i] += 1 if not generalized_peeling_success else 0
-                pruning_failures[i] += 1 if not pruning_success else 0
+                for pruning_failures_d, pruning_success_d in zip(pruning_failures.values(), pruning_success):
+                    pruning_failures_d[i] += 1 if not pruning_success_d else 0
                 
-                if pruning_failures[i] >= min_num_fails:
+                if pruning_failures[pruning_depth][i] >= min_num_fails:
                     num_trials = t+1
                     break
 
@@ -546,8 +550,9 @@ class TannerCodeHGP:
             generalized_peeling_stats["ler"][i] = mean(generalized_peeling_failures[i], num_trials)
             generalized_peeling_stats["ler_eb"][i] = eb(generalized_peeling_failures[i], num_trials)
 
-            pruning_stats["ler"][i] = mean(pruning_failures[i], num_trials)
-            pruning_stats["ler_eb"][i] = eb(pruning_failures[i], num_trials)
+            for pruning_stats_d, pruning_failures_d in zip(pruning_stats.values(), pruning_failures.values()):
+                pruning_stats_d["ler"][i] = mean(pruning_failures_d[i], num_trials)
+                pruning_stats_d["ler_eb"][i] = eb(pruning_failures_d[i], num_trials)
 
         return normal_peeling_stats, generalized_peeling_stats, pruning_stats
 
@@ -656,7 +661,9 @@ if __name__ == '__main__':
     assert np.all(Hz.todense() == new_tanner_hgp.std_Hz.todense())
     
     erasure_rate = np.array([0.20, 0.25])
-    normal_peeling_stats, generalized_peeling_stats, pruning_stats = new_tanner_hgp.gen_peel_benchmark(erasure_rate, max_num_trials=int(1e3))
+    normal_peeling_stats, generalized_peeling_stats, pruning_stats = new_tanner_hgp.gen_peel_benchmark(erasure_rate, 
+                                                                                                       max_num_trials=int(1e3), 
+                                                                                                       pruning_depth=2)
     
     theta = bpt.from_biadjacency_matrix(new_tanner_code.std_H, create_using=nx.MultiGraph)
     ML_results = MC_erasure_plog(int(1e4), state=theta, p_vals=erasure_rate)
@@ -667,7 +674,8 @@ if __name__ == '__main__':
     ax.errorbar(erasure_rate, ML_results["mean"], 1.96*ML_results["std"]/1e2, label="ML")
     ax.errorbar(erasure_rate, normal_peeling_stats["ler"], normal_peeling_stats["ler_eb"], label="normal")
     ax.errorbar(erasure_rate, generalized_peeling_stats["ler"], generalized_peeling_stats["ler_eb"], label="generalized")
-    ax.errorbar(erasure_rate, pruning_stats["ler"], pruning_stats["ler_eb"], label="pruning")
+    ax.errorbar(erasure_rate, pruning_stats[1]["ler"], pruning_stats[1]["ler_eb"], label="pruning depth=1")
+    ax.errorbar(erasure_rate, pruning_stats[2]["ler"], pruning_stats[2]["ler_eb"], label="pruning depth=2")
     # ax.errorbar(erasure_rate, peeling_results["mean"], 1.96*peeling_results["std"]/np.sqrt(1e3), label="peeling that works")
     plt.legend()
     plt.show()
