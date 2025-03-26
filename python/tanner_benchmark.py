@@ -64,7 +64,7 @@ MC_budget = {
         2: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
     }, 
     "ML": {
-        0: [int(1e3)]*6 + [int(5e6), int(5e6), int(5e5), int(5e5), int(1e5), int(1e4), int(1e4), int(1e3), int(1e3)], 
+        0: [int(1e3)]*6 + [int(1e6), int(1e6), int(5e5), int(5e5), int(1e5), int(1e4), int(1e4), int(1e3), int(1e3)], 
         1: [int(5e6), int(5e6), int(1e6)]+[int(1e5)]*3+[int(1e4)]*3+[int(1e3)]*6, 
         2: [int(1e5)]*2+[int(1e4)]*3+[int(1e3)]*10,
     }
