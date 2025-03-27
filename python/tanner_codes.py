@@ -489,7 +489,7 @@ class TannerCodeHGP:
             found_at_depth, stabilizer = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth)
             if found_at_depth[-1]:
                 # If found, arbiter the correction over a qubit inside its support (and unerase it)
-                gauge_qubit = np.nonzero(stabilizer)[0][0]
+                gauge_qubit = np.nonzero(stabilizer)[0][-1]
                 erasure[gauge_qubit] = 0
                 # Go back to peeling
                 self._peel_v3(erasure, std_H, outer_H, local_subcodes_full)
@@ -521,10 +521,8 @@ class TannerCodeHGP:
         if min_num_fails is None:
                 min_num_fails = max_num_trials
         
-        print(f'{p_vals = }')
         for i, er in enumerate(p_vals):
             num_trials = max_num_trials
-            print(f'{er = }')
             for t in (pbar := tqdm(range(max_num_trials))):
                 descr = f'#failures: Peel. {normal_peeling_failures[i]:.0f}'
                 descr += f'| Gen. Peel. = {generalized_peeling_failures[i]:.0f}'
