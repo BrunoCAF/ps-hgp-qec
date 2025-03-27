@@ -208,8 +208,10 @@ def HGP(H1: sp.csr_array, H2: sp.csr_array=None):
     H2 = H2.astype(np.uint)
     (m1, n1), (m2, n2) = H1.shape, H2.shape
     I = lambda n: sp.eye_array(n, dtype=np.uint)
-    Hz = sp.hstack([sp.kron(I(n1), H2), sp.kron(H1.T, I(m2))]).asformat('csr')
-    Hx = sp.hstack([sp.kron(H1, I(n2)), sp.kron(I(m1), H2.T)]).asformat('csr')
+    rows, cols, data = sp.find(sp.hstack([sp.kron(I(n1), H2), sp.kron(H1.T, I(m2))]))
+    Hz = sp.csr_array((data, (rows, cols))) # make sure that Hz.data contains only 1s, and no nasty 0s
+    rows, cols, data = sp.find(sp.hstack([sp.kron(H1, I(n2)), sp.kron(I(m1), H2.T)]))
+    Hx = sp.csr_array((data, (rows, cols))) # make sure that Hx.data contains only 1s, and no nasty 0s
     return Hx, Hz
 
 # @numba.njit
