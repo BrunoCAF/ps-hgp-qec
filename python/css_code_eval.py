@@ -82,22 +82,21 @@ def _peel(erasure: np.array, H: sp.csr_array) -> bool:
 def _fast_peel(erasure: np.ndarray, Hindptr: np.ndarray, Hindices: np.ndarray) -> bool:
     # Build adjacency list structure for erased bits, and keep track of their count
     erased_bits = np.nonzero(erasure)[0]
-    num_erased_bits = 0
+    num_erased_bits = len(erased_bits)
     reversed_erased_bits = np.zeros((len(erasure),), dtype=np.int32)
     for i, e in enumerate(erased_bits):
         reversed_erased_bits[e] = i
-    bit_adj_lists = np.zeros((len(erasure), len(Hindptr)), dtype=np.int32)
-    erased_bit_degrees = np.zeros((len(erasure),), dtype=np.int32)
+    bit_adj_lists = np.zeros((num_erased_bits, len(Hindptr)-1), dtype=np.int32)
+    erased_bit_degrees = np.zeros((num_erased_bits,), dtype=np.int32)
 
     # Keep track of the degree of the checks towards the erasure and stack the dangling checks
     check_erasure_degrees = np.zeros((len(Hindptr)-1,), dtype=np.int32)
     dangling_check_stack, stack_size = np.zeros((len(Hindptr)-1,), dtype=np.int32), 0
     
-    # Populate in the adjacency lists of the erased bits and add the first dangling checks
-    for check_idx in range(len(Hindptr)):
+    # Populate the adjacency lists of the erased bits and add the first dangling checks
+    for check_idx in range(len(Hindptr)-1):
         for bit_idx in Hindices[Hindptr[check_idx]:Hindptr[check_idx+1]]:
             if erasure[bit_idx]:
-                num_erased_bits += 1
                 check_erasure_degrees[check_idx] += 1
                 rev_bit_idx = reversed_erased_bits[bit_idx]
                 bit_adj_lists[rev_bit_idx][erased_bit_degrees[rev_bit_idx]] = check_idx
@@ -123,7 +122,7 @@ def _fast_peel(erasure: np.ndarray, Hindptr: np.ndarray, Hindices: np.ndarray) -
             return False
 
         # Find the corresponding dangling bit
-        for bit_idx in Hindices[Hindptr[check_idx]:Hindptr[check_idx+1]]:
+        for bit_idx in Hindices[Hindptr[dangling_check_idx]:Hindptr[dangling_check_idx+1]]:
             if erasure[bit_idx]:
                 dangling_bit_idx = bit_idx
                 break
@@ -164,8 +163,8 @@ def _fast_peel(erasure: np.ndarray, Hindptr: np.ndarray, Hindices: np.ndarray) -
 #     return True
 
 def peel(erasure: np.array, H: sp.csr_array) -> bool:
-    return _peel(erasure, H)
-    # return _fast_peel(erasure, H.indptr, H.indices)
+    # return _peel(erasure, H)
+    return _fast_peel(erasure, H.indptr, H.indices)
 
 
 def MC_peeling_classic(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -> dict:
@@ -271,6 +270,6 @@ def stabilizer_search(H: np.ndarray, erasure: np.ndarray, depth: int) -> tuple[l
             c = long_gosper_next(c)  # Get next subset using Gosper's hack
 
         found_at_depth[weight-1] = False
-        # print(f'Failed at depth {weight}!')
+        # print(f'Failed at depth {weight}! SS size = {np.count_nonzero(erasure)}')
         
     return found_at_depth, np.zeros_like(erasure)
