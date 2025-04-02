@@ -10,7 +10,7 @@ from tqdm import tqdm
 import time
 
 from css_code_eval import HGP, MC_erasure_plog, MC_peeling_HGP
-from experiments_settings import code_dimension, code_distance
+from experiments_settings import code_dimension, code_distance, smallest_SS_weight
 from tanner_codes import TannerCode, TannerCodeHGP
 
 ord_ass_28_4_13 = [
@@ -93,13 +93,13 @@ if __name__ == '__main__':
     code = tanner_code_K8_Hamming(order_assignment_list[C%3])
     if C // 3 == 1:
         code = sp.csr_array((code.T @ code).todense() & 1)
-    n, k, d = code.shape[1], code_dimension(code), code_distance(code)
-    nt, kt, dt = code.shape[0], code_dimension(code.T), code_distance(code.T)
-    print(f'Classical (base) code params: [n={n}, k={k}, d={d}], [n^t={nt}, k^t={kt}, d^t={dt}]')    
+    n, k, d, (s, _, _) = code.shape[1], code_dimension(code), code_distance(code), smallest_SS_weight(code)
+    nt, kt, dt, (st, _, _) = code.shape[0], code_dimension(code.T), code_distance(code.T), smallest_SS_weight(code.T)
+    print(f'Classical (base) code params: [{n=}, {k=}, {d=}, {s=}], [n^t={nt}, k^t={kt}, d^t={dt}, s^t={st}]')    
     print(f'Quantum HGP code params: [[N={n*n+nt*nt}, K={k*k+kt*kt}, D={min(d, dt)}]]')
     params = {
-        'n': n, 'nt': nt, 'k': k, 
-        'kt': kt, 'd': d, 'dt': dt, 
+        'n': n, 'k': k, 'd': d, 's': s, 
+        'nt': nt, 'kt': kt, 'dt': dt, 'st': st, 
         'N': n*n+nt*nt, 'K': k*k+kt*kt, 'D': min(d, dt), 
     }
 
@@ -124,33 +124,47 @@ if __name__ == '__main__':
     print('Running peeling decoding benchmark...')
     t0 = time.time()
     # peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
-    normal_peeling_stats, generalized_peeling_stats, pruning_stats = tanner_code_hgp.gen_peel_benchmark([er], pruning_depth=2,
+    normal_peeling_stats, pruning_stats, generalized_peeling_stats = tanner_code_hgp.gen_peel_benchmark([er], pruning_depth=1,
                                                                                                         max_num_trials=MC_peel)
     dt = time.time() - t0
     print(f'Peeling done in {dt:.3f} s')
-
+    print(f'{tanner_code_hgp.min_SS_size = }')
     # Save results
     print('Simulation done, saving results...')    
     time.sleep(E)
     with h5py.File("tanner_codes_benchmark.hdf5", "a") as f: 
         grp = f.require_group(f'[{n},{k},{d}]')
         
+        # Store [n, k, d, s], [nt, kt, dt, st], [[N, K, D]] params
         for par, val in params.items():
             grp.attrs[str(par)] = val
 
+        # Store min SS params for each decoder layer
+        if "minSS_peel" in grp.attrs:
+            grp.attrs["minSS_peel"] = min(grp.attrs["minSS_peel"], tanner_code_hgp.min_SS_size["peel"])
+        else:
+            grp.attrs["minSS_peel"] = tanner_code_hgp.min_SS_size["peel"]
+        for d, s in enumerate(tanner_code_hgp.min_SS_size["prun"]):
+            grp.attrs[f"minSS_prun_d={d+1}"] = min(grp.attrs[f"minSS_prun_d={d+1}"], s) if f"minSS_prun_d={d+1}" in grp.attrs else s
+        if "minSS_gen_peel" in grp.attrs:
+            grp.attrs["minSS_gen_peel"] = min(grp.attrs["minSS_gen_peel"], tanner_code_hgp.min_SS_size["gen peel"])
+        else:
+            grp.attrs["minSS_gen_peel"] = tanner_code_hgp.min_SS_size["gen peel"]
+
         subgrp = grp.require_group(f'ER={E}')
         
+        # Store LER statistics for each decoder
         subgrp.create_dataset("ML_ler", data=ML_results['mean'])
         subgrp.create_dataset("ML_eb", data=1.96*ML_results['std']/np.sqrt(MC_ML))
 
         subgrp.create_dataset("normal_peel_ler", data=normal_peeling_stats['ler'])
         subgrp.create_dataset("normal_peel_eb", data=normal_peeling_stats['ler_eb'])
 
-        subgrp.create_dataset("gen_peel_ler", data=generalized_peeling_stats['ler'])
-        subgrp.create_dataset("gen_peel_eb", data=generalized_peeling_stats['ler_eb'])
-
         for d, pruning_stats_d in pruning_stats.items():
             subgrp.create_dataset(f"prun_d{d}_ler", data=pruning_stats_d['ler'])
             subgrp.create_dataset(f"prun_d{d}_eb", data=pruning_stats_d['ler_eb'])
+
+        subgrp.create_dataset("gen_peel_ler", data=generalized_peeling_stats['ler'])
+        subgrp.create_dataset("gen_peel_eb", data=generalized_peeling_stats['ler_eb'])
     
     print('Results saved. All done.')
