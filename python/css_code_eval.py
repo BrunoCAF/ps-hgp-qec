@@ -142,25 +142,6 @@ def _fast_peel(erasure: np.ndarray, Hindptr: np.ndarray, Hindices: np.ndarray) -
     # If there are no erasures left, success
     return True
 
-# @numba.njit
-# def _peel(erasure: np.ndarray, H: np.ndarray) -> bool:
-#     while np.any(erasure):
-#         erased_cols = np.nonzero(erasure)[0]
-#         H_E = H[:, erased_cols]
-
-#         check_degrees = np.sum(H_E, axis=1)
-#         dangling_checks = np.nonzero(check_degrees == 1)[0]
-
-#         if len(dangling_checks) == 0:
-#             return False
-
-#         # Select a random dangling check manually
-#         dangling_check = npr.choice(dangling_checks)
-#         dangling_bit = erased_cols[np.argmax(H_E[dangling_check])]
-
-#         erasure[dangling_bit] = 0
-
-#     return True
 
 def peel(erasure: np.array, H: sp.csr_array) -> bool:
     # return _peel(erasure, H)
