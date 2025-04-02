@@ -143,7 +143,7 @@ def _smallest_SS_weight(H: np.ndarray) -> tuple[int, int, list]:
     min_w, num_ss = 0, 0
     min_SS = []
 
-    for weight in range(2, n):
+    for weight in range(2, n+1):
         c = (1 << weight) - 1  # Smallest subset of size 'weight'
         while c < (1 << n):
             # Convert 'c' to a binary representation as a NumPy array
@@ -162,7 +162,10 @@ def _smallest_SS_weight(H: np.ndarray) -> tuple[int, int, list]:
             return min_w, num_ss, min_SS
 
 def smallest_SS_weight(H: sp.csr_array) -> tuple[int, int, list]:
-    return _smallest_SS_weight((H.astype(np.uint8).todense()&1).astype(np.float32))
+    result = _smallest_SS_weight((H.astype(np.uint8).todense()&1).astype(np.float32))
+    if result is None:
+        return np.inf, 0, []
+    return result
 
 @numba.jit(nopython=True)
 def _code_distance(H: np.ndarray) -> int:
