@@ -59,9 +59,9 @@ def tanner_code_K8_Hamming(order_assignment: list[list[int]]) -> sp.csr_array:
 p_vals = np.linspace(0.1, 0.5, 15)
 MC_budget = {
     "peel": {
-        0: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
-        1: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
-        2: [int(1e5), int(5e4), int(1e4), int(1e4), int(5e3)]+[int(1e3)]*10, 
+        0: [int(1e6), int(5e5), int(1e5), int(1e5), int(5e3)]+[int(1e3)]*10, 
+        1: [int(1e6), int(5e5), int(1e5), int(1e5), int(5e3)]+[int(1e3)]*10, 
+        2: [int(1e6), int(5e5), int(1e5), int(1e5), int(5e3)]+[int(1e3)]*10, 
     }, 
     "ML": {
         0: [int(1e3)]*6 + [int(1e6), int(5e5), int(5e5), int(5e5), int(1e5), int(1e4), int(1e4), int(1e3), int(1e3)], 
@@ -124,7 +124,7 @@ if __name__ == '__main__':
     print('Running peeling decoding benchmark...')
     t0 = time.time()
     # peeling_results = MC_peeling_HGP(MC_peel, state=theta, p_vals=[er])
-    normal_peeling_stats, pruning_stats, generalized_peeling_stats = tanner_code_hgp.gen_peel_benchmark([er], pruning_depth=1,
+    normal_peeling_stats, pruning_stats, generalized_peeling_stats = tanner_code_hgp.gen_peel_benchmark([er], pruning_depth=2,
                                                                                                         max_num_trials=MC_peel)
     dt = time.time() - t0
     print(f'Peeling done in {dt:.3f} s')
