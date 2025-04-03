@@ -497,6 +497,7 @@ class TannerCodeHGP:
         erasure_X = erasure.copy()
 
         # Try to solve until both peeling, pruning and generalized peeling fail (or succeed)
+        # print('X:')
         normal_peeling_X_success, pruning_X_success, gen_peeling_X_success = \
             self._peel_v5(erasure_X, self.std_Hz, self.outer_Hz, self.local_subcodes_full_Hz, self.std_Hx, pruning_depth)
             
@@ -510,6 +511,7 @@ class TannerCodeHGP:
             erasure_Z = erasure.copy()
 
             # Try to solve until both peeling, pruning and generalized peeling fail (or succeed)
+            # print('Z:')
             normal_peeling_Z_success, pruning_Z_success, gen_peeling_Z_success = \
                 self._peel_v5(erasure_Z, self.std_Hx, self.outer_Hx, self.local_subcodes_full_Hx, self.std_Hz, pruning_depth)
             
@@ -531,12 +533,14 @@ class TannerCodeHGP:
 
         # After peeling stops, do pruning
         pruning_success = [True]*pruning_depth
+        start_next = None
         while np.any(erasure):
             # If peeling didn't work, look for a nontrivial stabilizer inside the erasure
             # If pruning failed at max depth, never try it again. 
             if pruning_success[-1]:
-                found_at_depth, stabilizer = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth)
-                pruning_success = [ps and fd for ps, fd in zip(pruning_success, found_at_depth)]
+                found_at_depth, stabilizer, start_next = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth, start=start_next)
+                for i, fd in enumerate(found_at_depth):
+                    pruning_success[i] &= fd
                 for i, ps in enumerate(pruning_success): # NOTE: keep track of smallest failure set
                     if not ps:
                         self.min_SS_size['prun'][i] = min(self.min_SS_size['prun'][i], np.count_nonzero(erasure))

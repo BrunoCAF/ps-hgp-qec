@@ -234,11 +234,16 @@ def MC_peeling_HGP(num_trials: int, state: nx.MultiGraph, p_vals: list[float]) -
     return _MC_peeling_HGP(num_trials, Hx, Hz, p_vals)
 
 # @numba.jit
-def stabilizer_search(H: np.ndarray, erasure: np.ndarray, depth: int) -> tuple[list[bool], np.ndarray]:
+def stabilizer_search(H: np.ndarray, erasure: np.ndarray, depth: int, start: int=None) -> tuple[list[bool], np.ndarray, int]:
     m, _ = H.shape
-    found_at_depth = [True]*depth
-    for weight in range(1, depth+1):
-        c = (1 << weight) - 1  # Smallest subset of size 'weight'
+
+    wt_start = 1 if start is None else sum((start >> i) & 1 for i in range(m))
+
+    found_at_depth = [False]*(wt_start-1) + [True]*(depth - wt_start + 1)
+    
+    for weight in range(wt_start, depth+1):
+        # Smallest subset of size 'weight'
+        c = (1 << weight) - 1 if start is None else start
         while c < (1 << m):
             # Convert 'c' to a binary representation as a NumPy array
             row_combination = np.array([(c >> i) & 1 for i in range(m)], dtype=bool) # , dtype=np.float32
@@ -246,11 +251,11 @@ def stabilizer_search(H: np.ndarray, erasure: np.ndarray, depth: int) -> tuple[l
             
             # Check if corresponding stabilizer lies within the erasure
             if np.any(stabilizer) and not np.any(stabilizer >> erasure):
-                return found_at_depth, stabilizer
+                return found_at_depth, stabilizer, long_gosper_next(c) if long_gosper_next(c) < (1<<m) else (1 << (weight+1)) - 1
 
             c = long_gosper_next(c)  # Get next subset using Gosper's hack
 
         found_at_depth[weight-1] = False
         # print(f'Failed at depth {weight}! SS size = {np.count_nonzero(erasure)}')
         
-    return found_at_depth, np.zeros_like(erasure)
+    return found_at_depth, np.zeros_like(erasure), None
