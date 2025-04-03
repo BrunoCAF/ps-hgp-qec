@@ -533,12 +533,13 @@ class TannerCodeHGP:
         pruning_success = [True]*pruning_depth
         while np.any(erasure):
             # If peeling didn't work, look for a nontrivial stabilizer inside the erasure
-            found_at_depth, stabilizer = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth)
-            pruning_success = [ps and fd for ps, fd in zip(pruning_success, found_at_depth)]
-            for i, ps in enumerate(pruning_success): # NOTE: keep track of smallest failure set
-                if not ps:
-                    self.min_SS_size['prun'][i] = min(self.min_SS_size['prun'][i], np.count_nonzero(erasure))
-            if found_at_depth[-1]:
+            # If pruning failed at max depth, never try it again. 
+            if pruning_success[-1]:
+                found_at_depth, stabilizer = stabilizer_search(std_H_conj.todense(), erasure, pruning_depth)
+                pruning_success = [ps and fd for ps, fd in zip(pruning_success, found_at_depth)]
+                for i, ps in enumerate(pruning_success): # NOTE: keep track of smallest failure set
+                    if not ps:
+                        self.min_SS_size['prun'][i] = min(self.min_SS_size['prun'][i], np.count_nonzero(erasure))
                 # If found, arbiter the correction over a qubit inside its support (and unerase it)
                 gauge_qubits = np.nonzero(stabilizer)[0]
                 gauge_qubit = min(gauge_qubits, key=lambda qb: std_H[:, erasure][std_H[:, [qb]].astype(bool).todense().flatten(), :].sum(axis=1).min())
