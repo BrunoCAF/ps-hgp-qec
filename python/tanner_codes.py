@@ -541,12 +541,13 @@ class TannerCodeHGP:
                     if not ps:
                         self.min_SS_size['prun'][i] = min(self.min_SS_size['prun'][i], np.count_nonzero(erasure))
                 # If found, arbiter the correction over a qubit inside its support (and unerase it)
-                gauge_qubits = np.nonzero(stabilizer)[0]
-                gauge_qubit = min(gauge_qubits, key=lambda qb: std_H[:, erasure][std_H[:, [qb]].astype(bool).todense().flatten(), :].sum(axis=1).min())
-                # gauge_qubit = gauge_qubits[-1]
-                erasure[gauge_qubit] = 0
-                # Go back to peeling
-                self.peel_0(erasure, std_H)
+                if found_at_depth[-1]:
+                    gauge_qubits = np.nonzero(stabilizer)[0]
+                    gauge_qubit = min(gauge_qubits, key=lambda qb: std_H[:, erasure][std_H[:, [qb]].astype(bool).todense().flatten(), :].sum(axis=1).min())
+                    # gauge_qubit = gauge_qubits[-1]
+                    erasure[gauge_qubit] = 0
+                    # Go back to peeling
+                    self.peel_0(erasure, std_H)
             else:
                 # If no stabilizer was found, pruning has failed. 
                 # Search for a "dangling" Tanner check by testing each one of them. 
