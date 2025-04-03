@@ -237,7 +237,7 @@ class TannerCodeHGP:
         start = r*m2 + self.classic_C2_tanner_splitting[c]
         end = start + self.local_subcodes_C2[c].shape[0]
         stride = 1
-        rows = self.std_Hx[start:end:stride, :]
+        rows = self.std_Hz[start:end:stride, :]
         support = np.unique(rows.indices)
         return sp.csr_array(rows[:, support].todense()), support
 
@@ -626,6 +626,19 @@ class TannerCodeHGP:
 
                 erasure = npr.rand(N) < er
                 normal_peeling_success, pruning_success, generalized_peeling_success = self.peel_v5(erasure, pruning_depth=pruning_depth, only_X=only_X)
+
+                # # Sanity check:
+                # gamma_Hz_E = pym4ri.chk2gen(self.std_Hz[:, erasure].astype(bool).todense())
+                # eta_Hx_E = pym4ri.gen2chk(self.std_Hx.astype(bool).todense())[:, erasure]
+                # ML_X_success = not np.any(pym4ri.gf2_mul(eta_Hx_E, gamma_Hz_E))
+                # gamma_Hx_E = pym4ri.chk2gen(self.std_Hx[:, erasure].astype(bool).todense())
+                # eta_Hz_E = pym4ri.gen2chk(self.std_Hz.astype(bool).todense())[:, erasure]
+                # ML_Z_success = not np.any(pym4ri.gf2_mul(eta_Hz_E, gamma_Hx_E))
+                # ML_success = ML_X_success and ML_Z_success
+                # if ML_success < generalized_peeling_success:
+                #     print(f"wtf??? {ML_success = }, {generalized_peeling_success = }, {pruning_success = }, {normal_peeling_success = }")
+                #     print(np.nonzero(erasure)[0])
+                #     assert ML_success >= generalized_peeling_success
 
                 normal_peeling_failures[i] += 1 if not normal_peeling_success else 0
                 for pruning_failures_d, pruning_success_d in zip(pruning_failures.values(), pruning_success):
