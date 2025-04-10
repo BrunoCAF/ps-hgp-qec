@@ -243,7 +243,7 @@ def stabilizer_search(H: np.ndarray, erasure: np.ndarray, depth: int, start: int
     
     for weight in range(wt_start, depth+1):
         # Smallest subset of size 'weight'
-        c = (1 << weight) - 1 if start is None else start
+        c = (1 << weight) - 1 if start is None or weight > wt_start else start
         while c < (1 << m):
             # Convert 'c' to a binary representation as a NumPy array
             row_combination = np.array([(c >> i) & 1 for i in range(m)], dtype=bool) # , dtype=np.float32
