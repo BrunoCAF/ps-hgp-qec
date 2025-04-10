@@ -61,7 +61,7 @@ MC_budget = {
     "peel": {
         0: [int(1e6), int(5e5), int(1e5), int(1e4), int(5e3)]+[int(1e3)]*10, 
         1: [int(1e6), int(5e5), int(1e5), int(1e4), int(5e3)]+[int(1e3)]*10, 
-        2: [int(1e6), int(5e5), int(1e5), int(1e4), int(5e3)]+[int(1e3)]*10, 
+        2: [int(1e6), int(1e5), int(1e5), int(1e4), int(5e3)]+[int(1e3)]*10, 
     }, 
     "ML": {
         0: [int(1e3)]*6 + [int(1e6), int(5e5), int(5e5), int(5e5), int(1e5), int(1e4), int(1e4), int(1e3), int(1e3)], 
