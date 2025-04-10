@@ -573,6 +573,39 @@ static PyObject *gf2_mul(PyObject *Py_UNUSED(self), PyObject *args) {
     return C_obj;
 }
 
+static PyObject *gf2_linsolve(PyObject *Py_UNUSED(self), PyObject *args) {
+    PyObject *A_obj, *b_obj;
+    if (!PyArg_ParseTuple(args, "OO", &A_obj, &b_obj))
+        return NULL;
+
+    mzd_t *A = PyArray_ToMzd(A_obj);
+    if (!A) return NULL;
+
+    mzd_t *b = PyArray_ToMzd(b_obj);
+    if (!b) {
+        mzd_free(A);
+        return NULL;
+    }
+
+    if (A->nrows != b->nrows) {
+        PyErr_SetString(PyExc_ValueError, "Number of rows of A and b must be equal");
+        mzd_free(A);
+        mzd_free(b);
+        return NULL;
+    }
+
+    if(mzd_solve_left(A, b, 0, 1) == -1){
+        PyErr_SetString(PyExc_ValueError, "No solution was found for Ax = b");
+        mzd_free(A);
+        mzd_free(b);
+        return NULL;        
+    }
+    PyObject *x_obj = MzdToPyArray(b);
+    mzd_free(A), mzd_free(b);
+
+    return x_obj;
+}
+
 static PyObject *MC_erasure_plog(PyObject *Py_UNUSED(self), PyObject *args) {
     // Parse all arguments to C/C++ data structures
     std::pair<int, int> shape;
@@ -750,6 +783,25 @@ PyDoc_STRVAR(chk2gen_doc,
     "    The generator matrix.\n"
 );
 
+PyDoc_STRVAR(gf2_linsolve_doc, 
+    "chk2gen(A: numpy.ndarray[bool], b: numpy.ndarray[bool]) -> numpy.ndarray[bool]\n"
+    "\n"
+    "Solve the linear system Ax = b for x.\n"
+    "\n"
+    "Parameters\n"
+    "----------\n"
+    "A : numpy.ndarray of bool\n"
+    "    The matrix of the linear system, must have shape (m, n).\n"
+    "b : numpy.ndarray of bool\n"
+    "    The right-hand side vector, must have shape (m, 1).\n"
+    "\n"
+    "Returns\n"
+    "-------\n"
+    "numpy.ndarray of bool\n"
+    "    The unique solution of the system Ax = b, of shape (n, 1).\n"
+    "    If the system has no solution or multiple solutions, an error is triggered.\n"
+);
+
 PyDoc_STRVAR(gf2_mul_doc, 
     "gf2_mul(A: numpy.ndarray[bool], B: numpy.ndarray[bool]) -> numpy.ndarray[bool]\n"
     "\n"
@@ -821,6 +873,7 @@ static PyMethodDef cssutils[] = {
     {"gen2chk", gen2chk, METH_VARARGS, gen2chk_doc},
     {"chk2gen", chk2gen, METH_VARARGS, chk2gen_doc},
 	{"gf2_mul", gf2_mul, METH_VARARGS, gf2_mul_doc},
+	{"gf2_linsolve", gf2_linsolve, METH_VARARGS, gf2_linsolve_doc},
 	{"rank", rank, METH_VARARGS, rank_doc},
     {"MC_erasure_plog", MC_erasure_plog, METH_VARARGS, MC_erasure_plog_doc},
     {NULL, NULL, 0, NULL},
