@@ -566,7 +566,7 @@ static PyObject *gf2_mul(PyObject *Py_UNUSED(self), PyObject *args) {
         return NULL;
     }
 
-    mzd_t *C = mzd_mul(NULL, A, B, 0);
+    mzd_t *C = (!A->nrows || !A->ncols || !B->ncols) ? mzd_init(A->ncols, B->nrows) : mzd_mul(NULL, A, B, 0);    
     PyObject *C_obj = MzdToPyArray(C);
     mzd_free(A), mzd_free(B), mzd_free(C);
 
